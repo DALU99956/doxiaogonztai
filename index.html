@@ -1,0 +1,4001 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>财经口播 · 动效预览台</title>
+  <style>
+    /* ---------- 全局变量 ---------- */
+    :root {
+      --bg: #0b0f1a;
+      --panel: #121828;
+      --panel2: #161d30;
+      --line: #242c44;
+      --txt: #e8edf7;
+      --sub: #8b96ae;
+      --accent: #f4c84b;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html,
+    body {
+      height: 100%;
+      background: radial-gradient(1200px 600px at 80% -10%, #1b2a52 0%, transparent 55%),
+        radial-gradient(900px 500px at 0% 110%, #241a3d 0%, transparent 55%), var(--bg);
+      color: var(--txt);
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+      font-size: 14px;
+    }
+
+    /* ---------- 布局 ---------- */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .preview-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      flex-shrink: 0;
+    }
+    .preview-toolbar .section-title {
+      white-space: nowrap;
+    }
+
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ---------- 中列：手机预览（真实设备外壳） ---------- */
+    /* 列宽贴合手机：手机高度 ≈ 视口高 - 88px（工具条/内边距），宽 = 高 × 9/16，加机身、竖排控制条与列内边距 */
+    .phone-col {
+      flex: 0 0 auto;
+      width: calc((100vh - 88px) * 9 / 16 + 120px);
+      min-width: 340px;
+      max-width: 46vw;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px 12px;
+      border-right: 1px solid var(--line);
+      background: radial-gradient(130% 95% at 50% 0%, rgba(38, 52, 90, 0.5) 0%, rgba(18, 24, 40, 0.25) 62%);
+      min-height: 0;
+    }
+    .device {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      container-type: size;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* 钛金属机身 */
+    .device-body {
+      position: relative;
+      padding: 13px;
+      border-radius: calc(10cqw + 13px);
+      background: linear-gradient(150deg, #6a7178 0%, #3a3f45 14%, #1d2024 38%, #17191d 52%, #2c3137 74%, #565d64 92%, #6f767d 100%);
+      box-shadow:
+        inset 0 0 0 1.5px rgba(255, 255, 255, 0.22),
+        inset 0 0 12px rgba(0, 0, 0, 0.65),
+        0 1px 2px rgba(0, 0, 0, 0.55),
+        0 10px 24px rgba(0, 0, 0, 0.5),
+        0 34px 68px rgba(0, 0, 0, 0.62);
+    }
+    /* 侧边实体按键 */
+    .d-btn {
+      position: absolute;
+      width: 3.5px;
+      border-radius: 2px;
+      background: linear-gradient(180deg, #7a828a 0%, #43484e 45%, #23262a 100%);
+      box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.7);
+      z-index: 1;
+    }
+    .d-mute {
+      left: -3.5px;
+      top: 16.5%;
+      height: 24px;
+    }
+    .d-volup {
+      left: -3.5px;
+      top: 25.5%;
+      height: 42px;
+    }
+    .d-voldn {
+      left: -3.5px;
+      top: 33%;
+      height: 42px;
+    }
+    .d-power {
+      right: -3.5px;
+      top: 26.5%;
+      height: 66px;
+    }
+
+    /* ---------- 左列：文案 / 卡片列表（与右栏等宽） ---------- */
+    .mid-col {
+      flex: 1 1 0;
+      min-width: 0;
+      border-right: 1px solid var(--line);
+      background: rgba(18, 24, 40, 0.5);
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+    .mid-top {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .mid-top::-webkit-scrollbar {
+      width: 4px;
+    }
+    .mid-top::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 3px;
+    }
+
+    /* ---------- 右列：编辑 + 导出（与左栏等宽） ---------- */
+    .right-col {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 16px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .right-col::-webkit-scrollbar {
+      width: 4px;
+    }
+    .right-col::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 3px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sub);
+      letter-spacing: 1px;
+      margin-bottom: 2px;
+    }
+
+    textarea {
+      width: 100%;
+      resize: vertical;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      color: var(--txt);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.6;
+      font-family: inherit;
+    }
+    /* 大输入框仅限左栏口播文案；编辑面板内的小框按行数自适应高度 */
+    #textInput {
+      min-height: 240px;
+    }
+    #editFields textarea {
+      min-height: 0;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      transition: 0.15s;
+      background: var(--panel2);
+      color: var(--txt);
+      border: 1px solid var(--line);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #f4c84b, #e0a73d);
+      color: #221a05;
+      border: none;
+    }
+    .btn-primary:hover {
+      filter: brightness(1.06);
+    }
+    .btn-ghost:hover {
+      border-color: var(--accent);
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    /* 主题色块 */
+    .swatches {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .sw {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      position: relative;
+      overflow: hidden;
+      transition: 0.15s;
+    }
+    .sw.active {
+      border-color: #fff;
+    }
+    .sw .bg {
+      position: absolute;
+      inset: 0;
+      opacity: 0.9;
+    }
+    .sw .bar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 8px;
+      background: var(--accent);
+    }
+    /* 编辑面板内的每卡迷你色块 */
+    .swatches.mini {
+      gap: 7px;
+    }
+    .swatches.mini .sw {
+      width: 26px;
+      height: 26px;
+      border-radius: 8px;
+      border-width: 2px;
+    }
+    .swatches.mini .sw .bar {
+      height: 6px;
+    }
+    /* 卡片列表中的主题色点 */
+    .card-item .theme-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 5px;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 卡片列表 */
+    .card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .card-list::-webkit-scrollbar {
+      width: 4px;
+    }
+    .card-list::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 3px;
+    }
+    .card-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+      background: var(--panel2);
+      transition: 0.15s;
+    }
+    .card-item.active {
+      border-color: var(--accent);
+      background: #1a2338;
+    }
+    .card-item .idx {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: #0b0f1a;
+      color: var(--sub);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .card-item.active .idx {
+      background: var(--accent);
+      color: #221a05;
+      font-weight: 700;
+    }
+    .card-item .info {
+      flex: 1;
+      min-width: 0;
+    }
+    .card-item .info .title {
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-item .info .desc {
+      font-size: 11px;
+      color: var(--sub);
+    }
+    .card-item select {
+      background: #0b0f1a;
+      color: var(--txt);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font-size: 11px;
+      padding: 2px 4px;
+      max-width: 80px;
+    }
+
+    /* ---------- 导出与预览设置卡片 ---------- */
+    .preview-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .preview-controls label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--sub);
+    }
+    .preview-controls input[type="range"] {
+      width: 90px;
+      accent-color: var(--accent);
+    }
+    .preview-controls input[type="number"] {
+      width: 48px;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      color: var(--txt);
+      border-radius: 6px;
+      padding: 2px 4px;
+      font-size: 13px;
+    }
+    .preview-controls .btn {
+      flex: 1 1 calc(50% - 5px);
+    }
+
+    .phone {
+      position: relative;
+      height: min(calc(100cqh - 26px), calc((100cqw - 26px) * 1.7778));
+      width: auto;
+      aspect-ratio: 9 / 16;
+      border-radius: 10cqw;
+      outline: 1.6cqw solid #060709;
+      background: #000;
+      overflow: hidden;
+      flex-shrink: 0;
+      container-type: size;
+    }
+    /* 卡片全屏铺满手机屏幕（视频式呈现），圆角与裁切由手机外壳负责 */
+    .phone svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      transition: opacity 0.45s ease;
+    }
+    .phone svg.layer-off {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .phone .nav-buttons {
+      position: absolute;
+      bottom: 6cqw;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 3.2cqw;
+      opacity: 0;
+      transition: opacity 0.2s;
+      z-index: 8;
+    }
+    .phone:hover .nav-buttons {
+      opacity: 1;
+    }
+    .phone .nav-buttons button {
+      width: 9.5cqw;
+      height: 9.5cqw;
+      border-radius: 50%;
+      border: 0.4cqw solid rgba(255, 255, 255, 0.25);
+      background: rgba(0, 0, 0, 0.4);
+      color: #fff;
+      font-size: 5.5cqw;
+      cursor: pointer;
+      transition: 0.15s;
+      backdrop-filter: blur(4px);
+    }
+    .phone .nav-buttons button:hover {
+      background: rgba(0, 0, 0, 0.7);
+    }
+
+    /* ---------- 真机细节：灵动岛 / Home 条 / 玻璃反光 ---------- */
+    .dy-island {
+      position: absolute;
+      top: 2.8cqw;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 32cqw;
+      height: 9.4cqw;
+      border-radius: 4.7cqw;
+      background: #000;
+      box-shadow: inset 0 0 0 0.28cqw rgba(255, 255, 255, 0.09), 0 0.3cqw 1.4cqw rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 2.4cqw;
+      padding-right: 3.5cqw;
+      z-index: 6;
+      pointer-events: none;
+    }
+    .island-cam {
+      width: 2.9cqw;
+      height: 2.9cqw;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 32%, #33415a 0%, #10151f 48%, #04060a 100%);
+      box-shadow: inset 0 0 0.7cqw rgba(110, 150, 230, 0.45), inset 0 0 0.28cqw rgba(0, 0, 0, 0.9);
+    }
+    .island-sensor {
+      width: 1.8cqw;
+      height: 1.8cqw;
+      border-radius: 50%;
+      background: #05070b;
+      box-shadow: inset 0 0 0.4cqw rgba(40, 55, 85, 0.95);
+    }
+    .phone-home {
+      position: absolute;
+      bottom: 2.1cqw;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 35cqw;
+      height: 1.3cqw;
+      border-radius: 0.8cqw;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 0 0.8cqw rgba(0, 0, 0, 0.4);
+      z-index: 6;
+      pointer-events: none;
+    }
+    /* ---------- 播放控制：竖排停靠条（手机右侧） ---------- */
+    .preview-stage {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      gap: 12px;
+      align-items: stretch;
+    }
+    .play-dock {
+      flex-shrink: 0;
+      width: 46px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 9px;
+      padding: 12px 0 10px;
+      border-radius: 13px;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+    }
+    .dock-time {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--txt);
+      font-variant-numeric: tabular-nums;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
+    .dock-time em {
+      font-style: normal;
+      color: var(--sub);
+      font-size: 9px;
+    }
+    .dock-time #dockTimeTotal {
+      color: var(--sub);
+    }
+    .dock-track {
+      width: 4px;
+      flex: 1;
+      min-height: 36px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow: hidden;
+    }
+    .dock-fill {
+      width: 100%;
+      height: 0%;
+      background: var(--accent);
+      border-radius: 2px;
+      transition: height 0.2s linear;
+    }
+    .pb-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid var(--line);
+      background: var(--panel2);
+      color: var(--txt);
+      font-size: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.15s;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .pb-btn:hover {
+      border-color: var(--accent);
+    }
+    .pb-btn.active {
+      background: var(--accent);
+      color: #221a05;
+      border-color: var(--accent);
+    }
+    .pb-main {
+      width: 34px;
+      height: 34px;
+      background: var(--accent);
+      color: #221a05;
+      border: none;
+      font-size: 13px;
+    }
+    .pb-main:hover {
+      filter: brightness(1.08);
+    }
+
+    /* 右侧编辑面板 */
+    .edit-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .edit-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .edit-card h3 {
+      font-size: 13px;
+      color: var(--sub);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .edit-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .edit-card-head h3 {
+      margin-bottom: 0;
+    }
+    .edit-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+    .edit-row label {
+      font-size: 12px;
+      color: var(--sub);
+      min-width: 40px;
+    }
+    .edit-row input,
+    .edit-row select {
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      color: var(--txt);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 13px;
+      flex: 1;
+      min-width: 60px;
+    }
+    .edit-row input[type="number"] {
+      width: 80px;
+      flex: 0 1 auto;
+    }
+    .edit-row .val-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      width: 100%;
+    }
+    .edit-row .val-group input {
+      flex: 1;
+      min-width: 50px;
+    }
+
+    /* 全屏模式 */
+    .fullscreen-mode .mid-col,
+    .fullscreen-mode .right-col,
+    .fullscreen-mode .preview-toolbar {
+      display: none !important;
+    }
+    .fullscreen-mode .main {
+      justify-content: center;
+      align-items: center;
+      background: #000;
+    }
+    .fullscreen-mode .phone-col {
+      border: none;
+      background: none;
+      width: auto;
+      min-width: 0;
+      padding: 12px 16px;
+    }
+    .fullscreen-mode .device-body {
+      height: auto;
+      width: auto;
+      background: none;
+      padding: 0;
+      box-shadow: none;
+      border-radius: 0;
+    }
+    .fullscreen-mode .device-body::after,
+    .fullscreen-mode .d-btn {
+      display: none;
+    }
+    .fullscreen-mode .phone {
+      height: min(86vh, 152vw);
+      width: auto;
+      border: none;
+      box-shadow: none;
+      outline: none;
+      border-radius: 10px;
+    }
+    .fullscreen-mode .play-dock {
+      position: relative;
+      z-index: 10;
+      background: rgba(0, 0, 0, 0.45);
+      border-color: rgba(255, 255, 255, 0.22);
+      backdrop-filter: blur(6px);
+    }
+    .exit-fullscreen {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      font-size: 14px;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+      transition: 0.15s;
+    }
+    .exit-fullscreen:hover {
+      background: rgba(0, 0, 0, 0.7);
+    }
+    .fullscreen-mode .exit-fullscreen {
+      display: inline-flex;
+    }
+
+    /* 比例切换（9:16 / 16:9） */
+    .ratio-switch {
+      display: flex;
+      gap: 4px;
+      background: var(--panel2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 3px;
+    }
+    .rs-btn {
+      border: none;
+      background: transparent;
+      color: var(--sub);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: 0.15s;
+      font-family: inherit;
+    }
+    .rs-btn:hover {
+      color: var(--txt);
+    }
+    .rs-btn.active {
+      background: var(--accent);
+      color: #221a05;
+    }
+    /* 16:9 模式：预览框切换为横屏比例 */
+    body.ratio-169 .phone-col {
+      width: min(46vw, calc((100vh - 88px) * 16 / 9 + 120px));
+    }
+    #app.fullscreen-mode .phone-col {
+      width: auto;
+    }
+    body.ratio-169 .device-body {
+      height: auto;
+      width: 100%;
+    }
+    body.ratio-169 .phone {
+      height: auto;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 4cqw;
+      outline-width: 1.4cqw;
+    }
+    body.ratio-169 .dy-island,
+    body.ratio-169 .phone-home {
+      display: none;
+    }
+    body.ratio-169 .fullscreen-mode .phone {
+      width: min(92vw, 150vh);
+      height: auto;
+    }
+
+    /* 响应式 */
+    @media (max-width: 1100px) {
+      .mid-col,
+      .right-col {
+        min-width: 240px;
+      }
+    }
+    @media (max-width: 860px) {
+      .main {
+        flex-direction: column;
+        overflow-y: auto;
+      }
+      .phone-col {
+        width: 100%;
+        min-width: 0;
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+        padding: 16px;
+      }
+      .device {
+        flex: none;
+        height: 620px;
+      }
+      .mid-col {
+        min-width: 0;
+        border-right: none;
+        border-bottom: 1px solid var(--line);
+      }
+      .mid-top {
+        overflow: visible;
+      }
+      .right-col {
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="main">
+        <!-- 左列：口播文案 / 卡片列表（配色已移至右栏） -->
+        <div class="mid-col">
+        <div class="mid-top">
+        <div>
+          <div class="section-title">① 口播文案</div>
+          <div class="row" style="justify-content:space-between;margin-top:4px;">
+            <textarea id="textInput" placeholder="粘贴口播文案，用句号/换行分段…">今年新能源汽车渗透率已经达到 42%，同比上涨 8 个百分点。
+上半年营收 12.4 亿，环比增长 6.8%，净利润 3.2 亿。
+一线、二线、三线城市的消费增速分别是 4.5%、6.2%、9.1%。
+未来三年 AI 算力需求预计翻 3 倍。</textarea>
+          </div>
+          <div class="row" style="margin-top:6px;">
+            <button class="btn btn-primary" id="btnGenerate" style="flex:1">⚡ 生成卡片</button>
+            <button class="btn btn-ghost btn-sm" id="btnSample">示例</button>
+          </div>
+          <button class="btn btn-ghost" id="btnShots" style="width:100%;margin-top:6px;">🎬 智能拆解为镜头</button>
+        </div>
+
+        <div>
+          <div class="section-title">② 卡片列表</div>
+          <button class="btn btn-ghost btn-sm" id="btnAddCard" style="width:100%;margin-bottom:8px;">＋ 新建卡片</button>
+          <div class="card-list" id="cardList"></div>
+        </div>
+
+        <div style="margin-top:auto;font-size:11px;color:var(--sub);border-top:1px solid var(--line);padding-top:10px;">
+          💡 点击卡片切换 · ← → 键快速翻页 · 空格播放/暂停
+        </div>
+        </div>
+        </div>
+
+        <!-- 中列：9:16 竖屏预览（真实手机外壳，卡片全屏播放） -->
+        <div class="phone-col">
+          <div class="preview-toolbar">
+            <div class="section-title">📱 实时预览</div>
+            <div style="flex:1"></div>
+            <div class="ratio-switch" id="ratioSwitch">
+              <button class="rs-btn active" data-r="9:16" title="竖屏 1080×1920">📱 9:16</button>
+              <button class="rs-btn" data-r="16:9" title="横屏 1920×1080">🖥️ 16:9</button>
+            </div>
+            <button class="btn btn-sm" id="fullscreenBtn">⛶ 全屏</button>
+          </div>
+          <div class="preview-stage">
+          <div class="device">
+            <div class="device-body">
+              <div class="d-btn d-mute" title="静音键"></div>
+              <div class="d-btn d-volup" title="音量 +"></div>
+              <div class="d-btn d-voldn" title="音量 −"></div>
+              <div class="d-btn d-power" title="电源键"></div>
+              <div class="phone" id="phone">
+                <svg id="layer0" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid meet"></svg>
+                <svg id="layer1" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid meet" class="layer-off"></svg>
+                <div class="dy-island"><span class="island-cam"></span><span class="island-sensor"></span></div>
+                <div class="phone-home"></div>
+            <div class="nav-buttons">
+              <button id="prevBtn">‹</button>
+              <button id="nextBtn">›</button>
+            </div>
+              </div>
+            </div>
+          </div>
+          <!-- 播放控制：竖排停靠条（手机右侧） -->
+          <div class="play-dock">
+            <div class="dock-time" title="当前 / 总时长">
+              <span id="dockTimeCur">00:00</span>
+              <em>/</em>
+              <span id="dockTimeTotal">00:00</span>
+            </div>
+            <div class="dock-track"><div class="dock-fill" id="dockFill"></div></div>
+            <button class="pb-btn" id="pbFirst" title="回到开头">⏮</button>
+            <button class="pb-btn pb-main" id="pbPlay" title="播放 / 暂停（空格）">▶</button>
+            <button class="pb-btn" id="pbNext" title="下一张（→）">⏭</button>
+            <button class="pb-btn active" id="pbLoop" title="循环播放">🔁</button>
+            <button class="pb-btn" id="pbAuto" title="空闲自动轮播（默认关闭，点击开启）">↻</button>
+          </div>
+          </div>
+        </div>
+
+        <!-- 右列：数据编辑（含每卡配色） + 导出与预览设置 -->
+        <div class="right-col">
+        <div class="edit-panel" id="editPanel">
+          <div class="edit-card" id="editCard">
+            <div class="edit-card-head">
+              <h3>✏️ 当前数据编辑</h3>
+              <button class="btn btn-sm btn-ghost" id="btnCopyCard">📋 复制卡片</button>
+            </div>
+            <div id="editFields">点击卡片以编辑</div>
+          </div>
+          <div class="edit-card" style="font-size:12px;color:var(--sub);">
+            <p style="margin:0;">修改后实时更新卡片，支持数字、单位、标签等；配色在上方逐卡选择。</p>
+          </div>
+        </div>
+
+        <div class="edit-card">
+          <div class="section-title" style="margin-bottom:8px;">📤 导出与预览设置</div>
+          <div class="preview-controls">
+            <button class="btn btn-sm btn-ghost" id="replayBtn">⟳ 重播动画</button>
+            <button class="btn btn-sm btn-ghost" id="exportPngBtn">📷 截图PNG</button>
+            <button class="btn btn-sm btn-ghost" id="exportPngTransparentBtn">📷 截图PNG（透明）</button>
+            <button class="btn btn-sm btn-ghost" id="exportSeqBtn">📦 导出视频序列</button>
+            <button class="btn btn-sm btn-ghost" id="exportVideoBtn" title="录制当前卡片完整动效为 1080x1920 高清视频（8Mbps/30fps）" style="width:100%;margin-top:6px;">📲 导出手机视频(MP4)</button>
+            <button class="btn btn-sm btn-ghost" id="exportAllBtn" title="一键记录所有卡片的完整动效 MP4，打包为一个 ZIP 下载到 D:\下载" style="width:100%;margin-top:6px;">⬇️ 一键下载全部卡片(MP4)</button>
+            <button class="btn btn-sm btn-ghost" id="exportGreenBtn" title="键控底动效素材：无背景无面板的裸动效浮在纯绿/品红底上。剪映中拖入画中画轨道叠于口播视频上方，色度抠图取底色即抠除，动效浮在人物画面上不遮挡" style="width:100%;margin-top:6px;">🟢 导出绿幕动效视频(MP4)</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="exit-fullscreen" id="exitFullscreenBtn">✕ 退出全屏</button>
+  <div id="exportToast" style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:rgba(15,20,30,0.94);color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:82vw;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);"></div>
+
+  <script>
+    // ================================
+    //  主题配置
+    // ================================
+    const THEMES = {
+      neonNight: { name: '0x100x 霓虹暗夜', bg1: '#0A0A0A', bg2: '#0D1117', accent: '#00F0FF', accent2: '#00FF88',
+        ink: '#F2F7FA', sub: '#5C7085', danger: '#FF6B00', grid: 'rgba(0,240,255,0.16)', hl: '#FFD700',
+        glassFill: 'rgba(255,255,255,0.055)', glassStroke: 'rgba(255,255,255,0.16)', light: false },
+      cryptoPulse: { name: '赛博加密', bg1: '#0F0817', bg2: '#2A0F45', accent: '#FF007A', accent2: '#7B2FBE',
+        ink: '#FBEFF8', sub: '#9C7FB5', danger: '#FF3D6E', grid: 'rgba(255,0,122,0.13)', hl: '#FFD700',
+        glassFill: 'rgba(255,255,255,0.05)', glassStroke: 'rgba(255,0,122,0.28)', light: false },
+      brightData: { name: '明快科普', bg1: '#F5F7FA', bg2: '#E8EDF5', accent: '#0057FF', accent2: '#FF6B35',
+        ink: '#0B1526', sub: '#5A6B85', danger: '#E5352B', grid: 'rgba(0,87,255,0.10)', hl: '#FF9500',
+        glassFill: 'rgba(255,255,255,0.74)', glassStroke: 'rgba(11,21,38,0.10)', light: true },
+      navyGold: { name: '深蓝金', bg1: '#0a1222', bg2: '#13274d', accent: '#f4c84b', accent2: '#35d0a5',
+        ink: '#f4f7fb', sub: '#93a0b8', danger: '#ff5d5d', grid: 'rgba(255,255,255,0.045)', hl: '#ffd24a',
+        glassFill: 'rgba(255,255,255,0.05)', glassStroke: 'rgba(255,255,255,0.14)', light: false },
+      inkGreen: { name: '墨绿金', bg1: '#07120f', bg2: '#123629', accent: '#e9c46a', accent2: '#2fe6a0',
+        ink: '#eef5ef', sub: '#8fa398', danger: '#ff6b6b', grid: 'rgba(255,255,255,0.045)', hl: '#ffd24a',
+        glassFill: 'rgba(255,255,255,0.05)', glassStroke: 'rgba(255,255,255,0.14)', light: false },
+      redBlack: { name: '红金', bg1: '#120608', bg2: '#3a0f14', accent: '#ffd24a', accent2: '#ff5d5d',
+        ink: '#fff1f1', sub: '#b78f92', danger: '#ff8f5d', grid: 'rgba(255,255,255,0.045)', hl: '#ffd24a',
+        glassFill: 'rgba(255,255,255,0.05)', glassStroke: 'rgba(255,255,255,0.14)', light: false },
+      purpleGold: { name: '紫金', bg1: '#0e0a1c', bg2: '#2a1a4a', accent: '#e9c46a', accent2: '#a78bfa',
+        ink: '#f3efff', sub: '#9d93bd', danger: '#ff7d9b', grid: 'rgba(255,255,255,0.045)', hl: '#ffd24a',
+        glassFill: 'rgba(255,255,255,0.05)', glassStroke: 'rgba(255,255,255,0.14)', light: false }
+    };
+    let currentTheme = 'neonNight';
+
+    // 卡片自身主题优先，否则回落到全局主题（兼容旧存档中无 theme 字段的卡片）
+    function themeOfCard(card) {
+      return (card && THEMES[card.theme]) ? card.theme : currentTheme;
+    }
+
+    // 每卡自适应配色（情绪映射）：涨/利好→红金，跌/风险→墨绿金，中性→深蓝金，金句卡固定深蓝金
+    const THEME_UP_WORDS = /上涨|增长|大涨|暴涨|攀升|新高|突破|翻倍|回升|反弹|盈利|获利|利好|放量|提速|走强|超预期|增[加了长]?|升[高了]?|涨[了幅]?/;
+    const THEME_DOWN_WORDS = /下跌|下滑|大跌|暴跌|回落|下挫|收缩|萎缩|亏损|利空|恶化|腰斩|下调|放缓|降温|承压|走弱|净减|减少|负增长|转亏|转负|降[了幅]?|跌[了幅]?/;
+    const THEME_ALT = { redBlack: 'purpleGold', inkGreen: 'purpleGold', navyGold: 'purpleGold', purpleGold: 'navyGold', cryptoPulse: 'redBlack', neonNight: 'brightData', brightData: 'neonNight' };
+    function autoThemeFor(card, prevKey) {
+      const s = String(card.text || card.label || '');
+      let up = THEME_UP_WORDS.test(s), down = THEME_DOWN_WORDS.test(s);
+      if (!up && !down) { up = card.dir === 'up'; down = card.dir === 'down'; }
+      // VS 卡按"新值 vs 旧值"方向定情绪（右侧标签为今年/现在时）
+      if (card.type === 'vs' && card.left && card.right) {
+        if (/今年|现在|目前|如今|当下/.test(String(card.right.label || '')) && Number(card.right.value) !== Number(card.left.value)) {
+          const rising = Number(card.right.value) > Number(card.left.value);
+          up = rising; down = !rising;
+        }
+      }
+      if (card.type === 'quote') return 'navyGold'; // 金句卡固定深蓝金
+      let t = up && !down ? 'redBlack' : (down && !up ? 'inkGreen' : 'navyGold');
+      if (t === prevKey && THEME_ALT[t]) t = THEME_ALT[t];
+      return t;
+    }
+
+    // ================================
+    //  画布比例（9:16 / 16:9）
+    // ================================
+    let ratio = '9:16';
+    let CANVAS = { w: 1080, h: 1920 };
+    function setRatio(r) {
+      ratio = r;
+      CANVAS = r === '16:9' ? { w: 1920, h: 1080 } : { w: 1080, h: 1920 };
+      document.body.classList.toggle('ratio-169', r === '16:9');
+      document.querySelectorAll('.rs-btn').forEach(b => b.classList.toggle('active', b.dataset.r === r));
+      [0, 1].forEach(i => {
+        const el = document.getElementById('layer' + i);
+        if (el) el.setAttribute('viewBox', `0 0 ${CANVAS.w} ${CANVAS.h}`);
+      });
+      if (cards.length) { replayAnimation(); }
+      saveState();
+    }
+
+    // ================================
+    //  状态
+    // ================================
+    let cards = [];
+    let activeIndex = 0;
+    let activeLayer = 0; // 0 或 1
+    let transparentShell = false; // 导出透明背景时为 true，svgShell 据此省略背景层
+    let bareShell = false; // 键控底（绿幕/品红幕）裸素材导出时为 true：另省略页眉/角标/玻璃面板
+
+    // ================================
+    //  本地自动保存（localStorage）
+    // ================================
+    const SAVE_KEY = 'financeMotionCards.v1';
+    let restoredRatio = '9:16';
+    function saveState() {
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify({
+          cards: cards,
+          activeIndex: activeIndex,
+          currentTheme: currentTheme,
+          ratio: ratio,
+          autoPlay: autoPlay,
+          text: document.getElementById('textInput').value
+        }));
+      } catch (e) {}
+    }
+    function tryRestore() {
+      try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (!raw) return false;
+        const s = JSON.parse(raw);
+        if (!Array.isArray(s.cards) || !s.cards.length) return false;
+        cards = s.cards;
+        activeIndex = Math.min(Math.max(0, s.activeIndex || 0), cards.length - 1);
+        currentTheme = THEMES[s.currentTheme] ? s.currentTheme : 'neonNight';
+        restoredRatio = s.ratio === '16:9' ? '16:9' : '9:16';
+        autoPlay = !!s.autoPlay; // 恢复用户勾选的自动轮播（默认 false）
+        document.getElementById('textInput').value = typeof s.text === 'string' ? s.text : '';
+        return true;
+      } catch (e) { return false; }
+    }
+
+    // ================================
+    //  工具函数
+    // ================================
+    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    function wrapText(text, max) {
+      const raw = String(text || '').replace(/\s+/g, '');
+      if (!raw) return [''];
+      const phrases = raw.match(/[^，。！？、；：:]+[，。！？、；：:]?/g) || [raw];
+      const lines = [];
+      let cur = '';
+      const flush = () => { if (cur) { lines.push(cur);
+          cur = ''; } };
+      for (const p of phrases) {
+        if (p.length > max) { flush(); for (let i = 0; i < p.length; i += max) lines.push(p.slice(i, i + max)); } else if (cur &&
+          (cur + p).length > max) { flush();
+          cur = p; } else cur += p;
+      }
+      flush();
+      return lines.length ? lines : [raw];
+    }
+
+    function renderLines(linesArr, o) {
+      const maxL = o.maxLines || 99;
+      const L = linesArr.slice(0, maxL);
+      if (linesArr.length > maxL) { L[L.length - 1] = L[L.length - 1].replace(/[，。！？、；：]$/, '') + '…'; }
+      const lh = Math.round(o.size * (o.lh || 1.25));
+      const delay = o.delay != null ? o.delay : 0;
+      const style = (i) => o.stagger === false ? '' : `style="animation-delay:${(delay + i * 0.08).toFixed(2)}s"`;
+      return L.map((ln, i) =>
+        `<text x="${o.x}" y="${Math.round(o.y + i * lh)}" text-anchor="${o.anchor || 'middle'}" font-size="${o.size}" fill="${o.fill}" class="${o.cls || ''}" ${style(i)}>${esc(ln)}</text>`
+      ).join('');
+    }
+
+    // 估算底部字幕衬底板的上边缘 y（供标签卡等内容避让，避免重叠）
+    function captionPlateTop(card, o) {
+      o = o || {};
+      // 必须与 bottomCaption 用同一份压缩后文本计算，否则板按原稿 5 行预留、文字只有 2 行，板和文字错位
+      const raw = condenseCaption(String(o.text != null ? o.text : card.text || ''));
+      let size = o.size || 44, perLine = 19;
+      let lines = wrapText(raw, perLine);
+      if (lines.length > 4) { size = 38; perLine = 22; lines = wrapText(raw, perLine); }
+      const lh = Math.round(size * 1.3);
+      const y0 = (o.y || 1445) - (Math.min(lines.length, 5) - 1) * lh;
+      return Math.round(y0 - size * 1.02 - 22);
+    }
+
+    // 底部口播字幕：底部锚定——最后一行基线固定 y=1445（画面 75%），整块向上生长，
+    // 严格避开短视频平台底部遮挡区（约 y>1630 被平台 UI 覆盖）；主内容压缩至 y≤1200 不重叠
+    // 重点字幕压缩（只删不改）：底部字幕是"重点内容"不是口播全文——超过 46 字的长稿
+    // 按"数据子句 > 涨跌动词 > 转折张力词"打分，抽最多 3 个关键子句，上限 42 字；短字幕原样保留
+    function condenseCaption(text) {
+      let s = String(text || '').trim().replace(/[。！？；;…]+$/, '');
+      if (s.replace(/\s/g, '').length <= 46) return s;
+      const clauses = s.split(/[，,。；;！!？?：:]/).map(c => c.trim()).filter(c => c.length >= 3);
+      if (clauses.length <= 2) return s;
+      const score = c => (/\d|[一二两三四五六七八九十]+成|[一二三四五六七八九十]+分之|一半|腰斩/.test(c) ? 3 : 0)
+        + (/(砍|少|跌|涨|掉|降|增|缩水|翻|亏|赚|暴涨|暴跌)/.test(c) ? 2 : 0)
+        + (/(反而|却|但|没人|卡脖子|卖不动|先趴下|先交卷|突破|新高|第一|最多|最慢)/.test(c) ? 2 : 0);
+      const ranked = clauses.map((c, i) => ({ sc: score(c), i })).sort((a, b) => b.sc - a.sc || a.i - b.i);
+      if (ranked[0].sc <= 0) return condenseNarrative(s) || s; // 全是无记分点的子句：退回金句压缩逻辑
+      const pick = ranked.slice(0, 3).map(p => p.i).sort((a, b) => a - b);
+      let out = pick.map(i => clauses[i]).join('，');
+      if (out.length > 42) out = out.slice(0, 42).replace(/[，,、]+$/, '') + '…';
+      return out;
+    }
+
+    function bottomCaption(card, o) {
+      o = o || {};
+      const t = themeForCard(card);
+      const rawSrc = String(o.text != null ? o.text : card.text || '');
+      // 重点字幕自动去水：超 46 字的口播原稿压缩成精华短句（只删不改），短字幕原样保留
+      const raw = condenseCaption(rawSrc);
+      // 字幕是重点文案：加大字号（36→44，超长文案 30→38），并用主色 ink 替代弱化灰
+      let size = o.size || 44, perLine = 19;
+      let lines = wrapText(raw, perLine);
+      if (lines.length > 4) { size = 38; perLine = 22; lines = wrapText(raw, perLine); }
+      const lh = Math.round(size * 1.3);
+      const anchorY = o.y || 1445;
+      const y0 = anchorY - (Math.min(lines.length, 5) - 1) * lh;
+      // 半透明衬底板：任何背景下字幕都清晰凸出，不再糊进背景
+      const delay = o.delay != null ? o.delay : 0.5;
+      const maxChars = Math.max(1, ...lines.map(l => l.length));
+      const padX = 38, padY = 22;
+      const bw = Math.min(1010, Math.round(maxChars * size + padX * 2));
+      const bh = Math.round((Math.min(lines.length, 5) - 1) * lh + size * 1.28 + padY * 2);
+      const bx = 540 - Math.round(bw / 2), by = captionPlateTop(card, o);
+      const plate = `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="26" fill="${t.light ? 'rgba(255,255,255,0.78)' : 'rgba(5,8,16,0.46)'}" stroke="${t.light ? 'rgba(11,21,38,0.12)' : 'rgba(255,255,255,0.12)'}" stroke-width="2"/>`;
+      return `<g class="fade" style="animation-delay:${delay.toFixed(2)}s">${plate}</g>` + renderLines(lines, { x: 540, y: y0, size,
+        fill: o.fill || t.ink, anchor: 'middle', cls: 'rise2', lh: 1.3, maxLines: 5,
+        delay });
+    }
+
+    // 数字单位：量级词(万亿/亿/万/千/倍) + 计量量词(元/块/台/辆/单/股…) 组合成完整单位。
+    // "500万辆"→"万辆"、"30亿单"→"亿单"、"350块"→"块"，避免把量词丢掉导致大数字缺单位。
+    const NUM_UNIT = '(?:个?(?:万亿|亿|万|千)|倍)?(?:平方米|平米|个百分点|块钱|台|辆|架|艘|套|户|股|单|件|支|吨|平方|万元|元|块|角|米|用户|%|％)?';
+    function extractNumbers(s) {
+      const out = [];
+      // 负数支持："-3.2亿 / −20%" 提取为负值；(?<![\d年月日]) 挡住 "2023-2024 / 1月-3月" 这类区间连字符
+      const re = new RegExp('(?<![\\d年月日])[-−]\\s*(\\d+(?:\\.\\d+)?)\\s*(' + NUM_UNIT + ')|(\\d+(?:\\.\\d+)?)\\s*(' + NUM_UNIT + ')', 'g');
+      let m;
+      while ((m = re.exec(s)) !== null) {
+        // 口语"个亿/个万"里的"个"是量词冗余，单位只保留量级（"4个亿"→单位"亿"，不显示"个亿"）
+        if (m[1] != null) out.push({ text: m[0].replace(/\s+/g, ''), num: -parseFloat(m[1]), unit: (m[2] || '').replace(/^个/, '') });
+        else out.push({ text: m[0], num: parseFloat(m[3]), unit: (m[4] || '').replace(/^个/, '') });
+      }
+      return out;
+    }
+
+    // 渲染层单位兜底：解析时单位被丢弃的陈卡，从原文数字后量词补回（"350块"→"块"、"500万辆"→"万辆"），刷新即生效
+    function measUnitOf(text, numStr) {
+      const s = String(text || '');
+      const n = String(numStr);
+      const i = s.indexOf(n);
+      if (i < 0) return '';
+      const rest = s.slice(i + n.length);
+      const m = rest.match(/^\s*((?:个?(?:万亿|亿|万|千)|倍)?(?:平方米|平米|个百分点|块钱|台|辆|架|艘|套|户|股|单|件|支|吨|平方|万元|元|块|角|米|用户|%|％)?)/);
+      return m && m[1] ? m[1].replace(/^个/, '') : '';
+    }
+
+    function pickKpi(nums) {
+      if (!nums.length) return null;
+      const order = ['%', '％', '个百分点', '万亿', '亿', '倍', '万', '千', ''];
+      for (const u of order) {
+        // 复合单位（"万辆/亿元/亿单"）按量级前缀兼容归属，避免落到 nums[0] 错位
+        const f = nums.find(n => u ? (n.unit === u || n.unit.indexOf(u) === 0) : n.unit === '');
+        if (f) return f;
+      }
+      return nums[0] || null;
+    }
+
+    // 中文变化份额提取："利润砍掉了将近七成/少了三成二/砍掉三分之二/涨了三成/腰斩" → { num:%, dir }
+    // 必须是"变化动词+份额"组合，静态份额（"三成用户来自…"）不会误伤
+    function changeShareOf(s) {
+      const C2N = { '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+      const nOf = w => /\d/.test(w) ? parseInt(w, 10) : C2N[w] || 0;
+      const m = String(s || '').match(/(腰斩|砍掉了?|砍去|缩水|蒸发|下滑了?|下跌了?|跌去了?|下降了?|减少了?|掉了?|降了|少了|多了|涨了|增了|增长了?|提高了?|提升了?)(?:近|将近|超过|逾|约)?\s*(一半|[一二两三四五六七八九十\d]成[一二三四五六七八九十\d]?|[一二三四五六七八九十\d]分之[一二三四五六七八九十\d])?/);
+      if (!m) return null;
+      let num = 0;
+      if (/腰斩/.test(m[1]) || m[2] === '一半') num = 50;
+      else if (m[2]) {
+        const cm = m[2].match(/^([一二两三四五六七八九十\d])成([一二三四五六七八九十\d])?$/);
+        const fm = m[2].match(/^([一二三四五六七八九十\d])分之([一二三四五六七八九十\d])$/);
+        if (cm) num = nOf(cm[1]) * 10 + (cm[2] ? nOf(cm[2]) : 0);
+        else if (fm) num = Math.round(nOf(fm[2]) / nOf(fm[1]) * 100);
+      }
+      if (!num || num > 100) return null;
+      const down = /腰斩|砍|少|缩水|蒸发|下滑|下跌|跌|下降|减少|掉|降/.test(m[1]);
+      return { num, dir: down ? 'down' : 'up' };
+    }
+
+    function trendDir(s) {
+      const x = String(s || '');
+      if (/扭亏为盈|扭亏增盈|由亏转盈/.test(x)) return 'up';
+      if (/跌|降|下滑|下降|回落|萎缩|亏损|亏了|净亏|砍|缩水|蒸发|腰斩|少了|掉了|减少|净减|负增长|转亏|转负/.test(x)) return 'down';
+      if (/涨|增|升|上涨|增长|上升|翻|盈利|突破/.test(x)) return 'up';
+      if (/(?<![\d年月日])[-−]\s*\d/.test(x)) return 'down'; // 裸负数："净利润-3.2亿"（区间连字符被负向断言挡住）
+      return 'flat';
+    }
+
+    // ===== 大号加减符号徽章（全局涨跌动效，红涨绿跌）=====
+    // 负数 / 同比增减 / 趋势句一律配发：弹入 + 扩散环 + 持续浮动；flat 不渲染
+    function deltaBadge(dir, x, y, r, opts) {
+      if (dir !== 'up' && dir !== 'down') return '';
+      const o = opts || {}; r = r || 84;
+      const up = dir === 'up';
+      const fill = up ? (o.light ? '#e0303a' : '#ff4d4f') : (o.light ? '#0a9a63' : '#00c48c');
+      const d = o.delay != null ? o.delay : 0.9;
+      const disc = Math.round(r * 0.62);
+      const bar = Math.round(r * 0.44), th = Math.round(r * 0.18);
+      const sym = `<rect x="${-bar}" y="${-Math.round(th / 2)}" width="${bar * 2}" height="${th}" rx="${Math.round(th / 2)}" fill="#FFFFFF"/>` +
+        (up ? `<rect x="${-Math.round(th / 2)}" y="${-bar}" width="${th}" height="${bar * 2}" rx="${Math.round(th / 2)}" fill="#FFFFFF"/>` : '');
+      return `<g transform="translate(${x} ${y})">
+        <circle r="${r}" fill="${fill}" opacity="0.22" style="animation:deltaRing 1.5s ease-out ${d}s both;transform-origin:center;transform-box:fill-box"/>
+        <circle r="${Math.round(r * 0.86)}" fill="${fill}" opacity="0.30" style="animation:deltaRing 1.5s ease-out ${(d + 0.12).toFixed(2)}s both;transform-origin:center;transform-box:fill-box"/>
+        <g style="animation:deltaPop .75s cubic-bezier(.2,1.5,.4,1) ${d}s both;transform-origin:center;transform-box:fill-box">
+          <circle r="${disc}" fill="${fill}"/>
+          <circle r="${disc}" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="${Math.max(4, Math.round(r * 0.05))}"/>
+          <g class="${up ? 'arrowNudge' : 'arrowNudgeD'}" style="animation-delay:${(d + 0.8).toFixed(2)}s">${sym}</g>
+        </g>
+      </g>`;
+    }
+    // 渲染层方向兜底：卡片自带 dir 优先（解析层已识别负数/同比/变化份额），
+    // 主数据为负直接判跌，否则从文案推断——保证每张数据卡都拿得到方向
+    function dirOfCard(card) {
+      if (card && (card.dir === 'up' || card.dir === 'down')) return card.dir;
+      const k = card && card.kpi;
+      if (k && Number(k.num) < 0) return 'down';
+      return trendDir(String((card && card.text) || '') + ' ' + String((card && card.label) || '') + ' ' + String((card && card.title) || ''));
+    }
+
+    function extractLabels(s, n) {
+      s = String(s || '');
+      const found = [];
+      const add = (arr) => { (arr || []).forEach(x => { const v = String(x === undefined ? '' : x).trim(); if (found.length <
+            n && v) found.push(v); }); };
+      add(s.match(/20\d{2}(?=[年、,，\s]|$)/g));
+      add((s.match(/Q[1-4]|[一二三四]季度/g) || []).map(x => /^Q/.test(x) ? x : { '一': 'Q1', '二': 'Q2', '三': 'Q3',
+          '四': 'Q4' } [x[0]]));
+      add((s.match(/\d{1,2}(?=\s*月)/g) || []).map(x => x + '月'));
+      add((s.match(/[一二三四五六七八九十](?=\s*线)/g) || []).map(x => x + '线'));
+      const m = s.match(/[\u4e00-\u9fa5A-Za-z]{2,6}(?:[、,，][\u4e00-\u9fa5A-Za-z]{2,6})+/);
+      if (m) add(m[0].split(/[、,，]/).map(x => x.trim()).filter(Boolean));
+      for (let i = found.length; i < n; i++) found.push('第' + (i + 1) + '项');
+      return found.slice(0, n).map(l => l.length > 8 ? l.slice(0, 8) + '…' : l);
+    }
+
+    function extractDataPoints(s) {
+      const pts = [];
+      const re = /([\u4e00-\u9fa5A-Za-z]{1,8})\s*(\d+(?:\.\d+)?)\s*(万亿|亿|万|千|倍|%|％|个百分点)?/g;
+      let m;
+      while ((m = re.exec(s))) {
+        pts.push({ label: m[1].replace(/^(今年|去年|上半年|下半年|当月|本月|当季|本季|Q[1-4]|其中|同比|环比)/, '').replace(
+            /(达到|约为|约|为|是|分别|共计|合计|总共|了|增长|同比增长|下降|下滑|回落|减少|减少到|砍掉|下跌|上涨|微增|微降|涨|跌|降|升|少|亏|赚|退|掉)$/, ''), num: parseFloat(m[2]), unit: m[3] || '' });
+      }
+      return pts;
+    }
+
+
+    // 提取数字旁的真实指标词作为条形标签（营收/利润/销量…）：按标点切句，句内命中指标词表即取该词，
+    // 比 extractDataPoints 的去动词剥离更干净——“去年营收跌了33.47%”直接得到“营收”，而非“营收跌”
+    function metricLabelsForBar(s, n) {
+      const kws = ['净利润率', '毛利率', '净利润', '净利', '营收', '收入', '利润', '市占率', '市占', '渗透率', '渗透', '增速', '涨幅', '跌幅',
+        '涨跌幅', '占比', '份额', '规模', '销量', '销售额', '产量', '出货量', '保有量', '市值', '股价', '融资', '订单', '毛利', '亏损', '盈利', '用户', '会员', '门店'];
+      const segs = String(s || '').split(/[，。；、,.;:：！？!?]/).map(x => x.trim()).filter(Boolean);
+      const out = [];
+      for (const seg of segs) {
+        if (!/[\d一二两三四五六七八九十]/.test(seg)) continue;
+        let kw = null;
+        for (const k of kws) if (seg.includes(k)) { kw = k; break; }
+        if (kw && out.indexOf(kw) < 0) out.push(kw);
+      }
+      return out.slice(0, n);
+    }
+    function labelsForSeries(seg, unit, n) {
+      const mkw = metricLabelsForBar(seg, n);
+      if (mkw.length >= n) return mkw.map(l => l.length > 8 ? l.slice(0, 8) + '…' : l);
+      const fromList = extractLabels(seg, n);
+      const isDefault = fromList.every((l, i) => l === ('第' + (i + 1) + '项'));
+      if (!isDefault) return fromList;
+      const pts = extractDataPoints(seg);
+      const matched = pts.filter(p => p.unit === unit);
+      if (matched.length >= n) { const lbs = matched.map(p => p.label).filter(Boolean); if (lbs.length >= n) return lbs.slice(
+          0, n); }
+      return fromList;
+    }
+
+    // ================================
+    //  卡片渲染（CSS 动画内嵌）
+    // ================================
+    const BASE_CSS = `
+      *{font-family:"Smiley Sans","得意黑","Source Han Sans CN Heavy","思源黑体 Heavy","PingFang SC","Microsoft YaHei",-apple-system,sans-serif}
+      .numfont{font-family:"Montserrat","Bebas Neue","Smiley Sans","Arial Narrow","PingFang SC",sans-serif;font-weight:900;letter-spacing:-0.01em}
+      .fade{animation:fade .7s ease both}
+      @keyframes fade{from{opacity:0}to{opacity:1}}
+      .rise{animation:rise .7s cubic-bezier(.2,.7,.2,1) both}
+      @keyframes rise{from{opacity:0;transform:translateY(70px)}to{opacity:1;transform:translateY(0)}}
+      .rise2{animation:rise .8s cubic-bezier(.2,.7,.2,1) both}
+      .pop{animation:pop .65s cubic-bezier(.2,1.5,.4,1) both}
+      @keyframes pop{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:scale(1)}}
+      .floaty{animation:floaty 3.2s ease-in-out infinite}
+      @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-26px)}}
+      .pulse{animation:pulse 2.6s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+      @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+      .barGrow{animation:barGrow 1.1s cubic-bezier(.2,.8,.2,1) both;transform-origin:center bottom;transform-box:fill-box}
+      @keyframes barGrow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+      .ringSweep{animation:ringSweep 1.7s cubic-bezier(.3,.7,.3,1) .3s both}
+      @keyframes ringSweep{to{stroke-dashoffset:var(--to,0)}}
+      .lineDraw{stroke-dasharray:1000;stroke-dashoffset:1000;animation:lineDraw 1.7s ease .3s both}
+      @keyframes lineDraw{to{stroke-dashoffset:var(--to,0)}}
+      .arrowNudge{animation:arrowNudge 1.4s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+      @keyframes arrowNudge{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+      .wordPop{animation:wordPop .5s cubic-bezier(.2,1.4,.4,1) both;transform-origin:left center;transform-box:fill-box}
+      @keyframes wordPop{from{opacity:0;transform:translateY(30px) scale(.8)}to{opacity:1;transform:translateY(0) scale(1)}}
+      /* Odometer 机械滚轮数字：数字列沿 +y 排布、向上滚动进入窗口；个位圈数 10 倍于十位（不同圈数）→ 同时长下个位速度约为十位 10 倍 */
+      .odoCol{animation:odoRoll var(--dur,1s) cubic-bezier(.25,1.02,.35,1) both;animation-delay:var(--dl,0s)}
+    @keyframes odoRoll{from{transform:translateY(0)}to{transform:translateY(var(--d,0px))}}
+      /* 条形图竞赛：行滑入排位 + 条形从左生长 */
+      .raceRow{animation:raceRow .95s cubic-bezier(.2,.85,.25,1) both;animation-delay:var(--rd,0s)}
+      @keyframes raceRow{from{transform:translateY(var(--from,0px))}to{transform:translateY(0)}}
+      .raceBar{animation:raceBar .9s cubic-bezier(.2,.85,.2,1) both;animation-delay:var(--rd,0s)}
+      @keyframes raceBar{from{width:0}to{width:var(--w,100px)}}
+      /* Hormozi 逐词打字机 */
+      .tw{animation:twIn .42s cubic-bezier(.2,1.3,.4,1) both;animation-delay:var(--td,0s)}
+      @keyframes twIn{from{opacity:0;transform:translateY(26px) scale(.86)}to{opacity:1;transform:translateY(0) scale(1)}}
+      .slideL{animation:slideL .8s cubic-bezier(.2,.8,.25,1) both;animation-delay:var(--rd,0s)}
+      @keyframes slideL{from{opacity:0;transform:translateX(180px)}to{opacity:1;transform:translateX(0)}}
+      .ulSweep{transform-origin:left center;transform-box:fill-box;animation:ulSweep .9s cubic-bezier(.2,.8,.2,1) .55s both}
+      @keyframes ulSweep{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+      .gaugeNeedle{transform-origin:0 0;animation:gaugeNeedle 1.4s cubic-bezier(.18,1.12,.28,1) .7s both}
+      @keyframes gaugeNeedle{from{transform:rotate(-90deg)}to{transform:rotate(var(--nd,0deg))}}
+      .vsBadge{transform-origin:540px 860px;animation:vsBadge .7s cubic-bezier(.2,1.45,.4,1) .5s both}
+      @keyframes vsBadge{from{opacity:0;transform:rotate(-24deg) scale(.35)}to{opacity:1;transform:rotate(-8deg) scale(1)}}
+      /* 大号加减符号徽章（红涨绿跌）：弹入 + 扩散环 + 持续浮动 */
+      @keyframes deltaPop{0%{opacity:0;transform:scale(.15) rotate(-32deg)}62%{opacity:1;transform:scale(1.16) rotate(4deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
+      @keyframes deltaRing{0%{opacity:.85;transform:scale(.45)}100%{opacity:0;transform:scale(2.05)}}
+      @keyframes arrowNudgeD{0%,100%{transform:translateY(0)}50%{transform:translateY(14px)}}
+      .arrowNudgeD{animation:arrowNudgeD 1.4s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+      .nodeDot{transform-box:fill-box;transform-origin:center;animation:pop .55s cubic-bezier(.2,1.5,.4,1) both;animation-delay:var(--rd,0s)}
+      .tagCaps{transform-box:fill-box;transform-origin:center;animation:pop .6s cubic-bezier(.2,1.35,.4,1) both;animation-delay:var(--rd,0s)}
+      .tickIn{animation:fade .4s ease both;animation-delay:var(--rd,0s)}
+    `;
+
+    // Pill 角标默认文案
+    function defaultPill(card) {
+      if (card.pill !== undefined) return card.pill;
+      if (card.type === 'kpi') return card.dir === 'down' ? '⚠️ 预警' : '📈 新高';
+      if (card.type === 'bar') return '🔥 热点';
+      if (card.type === 'line') return '📈 趋势';
+      if (card.type === 'rank') return '🏆 榜单';
+      if (card.type === 'vs') return '⚔️ 对比';
+      if (card.type === 'gauge') return '📊 读数';
+      if (card.type === 'quote') return '💬 金句';
+      if (card.type === 'timeline') return '📅 沿革';
+      if (card.type === 'tags') return '🏷️ 要点';
+      return '💡 观点';
+    }
+
+    // K线蜡烛水印（纯氛围，opacity 0.06）
+    function candleWatermark(t, W, H) {
+      const seq = [
+        [0.42, 0.055, 1], [0.56, 0.09, 1], [0.50, 0.04, -1], [0.68, 0.11, 1], [0.62, 0.05, -1],
+        [0.80, 0.14, 1], [0.74, 0.06, -1], [0.92, 0.10, 1], [0.86, 0.07, -1], [1.04, 0.16, 1]
+      ];
+      const cw = W * 0.052, gap = W * 0.096, x0 = W * 0.10, mid = H * 0.66, amp = H * 0.11;
+      let out = '';
+      seq.forEach((c, i) => {
+        const [base, h, up] = c;
+        const x = x0 + i * gap;
+        const bodyTop = mid - base * amp * up - h * amp / 2;
+        const bh = Math.max(h * amp, H * 0.008);
+        out += `<line x1="${x + cw / 2}" y1="${bodyTop - h * amp * 0.5}" x2="${x + cw / 2}" y2="${bodyTop + bh + h * amp * 0.5}" stroke="${t.accent}" stroke-width="${W * 0.004}"/>`;
+        out += `<rect x="${x}" y="${bodyTop}" width="${cw}" height="${bh}" fill="${t.accent}" ${up < 0 ? 'fill-opacity="0.5"' : ''}/>`;
+      });
+      return out;
+    }
+
+    // 玻璃面板（半透明底 + 1px 低透明白边）；透明导出时省略描边避免灰边
+    function glassPanel(x, y, w, h, r) {
+      if (bareShell) return ''; // 键控底裸素材：不画面板（半透明面板混入键控色，抠像后残留色边）
+      const stroke = transparentShell ? '' : ' stroke="url(#glassStroke)" stroke-width="2"';
+      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="url(#glassFill)"${stroke}/>`;
+    }
+
+    function mixHex(a, b, r = 0.5) {
+      const A = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16));
+      const B = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+      return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * r).toString(16).padStart(2, '0')).join('');
+    }
+
+    function svgShell(inner, opts) {
+      const o = opts || {};
+      const t = themeForCard(o.card);
+      const bgFlat = mixHex(t.bg1, t.bg2);
+      const W = CANVAS.w, H = CANVAS.h;
+      const wide = ratio === '16:9';
+      // 16:9：内容按 9:16 设计稿缩放 0.5625 后水平居中；背景/网格/水印铺满全画布
+      const contentTransform = wide ? `transform="translate(${((W - 1080 * 0.5625) / 2).toFixed(1)},0) scale(0.5625)"` : '';
+      const gridLines = Array.from({ length: 25 }, (_, i) => `<line x1="${(W * 0.04).toFixed(0)}" y1="${(H * 0.07 + i * (H * 0.88) / 24).toFixed(0)}" x2="${(W * 0.96).toFixed(0)}" y2="${(H * 0.07 + i * (H * 0.88) / 24).toFixed(0)}"/>`).join('') +
+        Array.from({ length: 11 }, (_, i) => `<line x1="${(W * 0.05 + i * (W * 0.9) / 10).toFixed(0)}" y1="${(H * 0.06).toFixed(0)}" x2="${(W * 0.05 + i * (W * 0.9) / 10).toFixed(0)}" y2="${(H * 0.96).toFixed(0)}"/>`).join('');
+      const pill = defaultPill(o.card || {});
+      let pillSvg = '';
+      if (pill && !bareShell) {
+        const pw = pill.length * 26 + 56;
+        const pillStroke = transparentShell ? '' : ` stroke="${t.accent}" stroke-opacity="0.55" stroke-width="2.5"`;
+        pillSvg = `<g class="fade"><rect x="${W - 64 - pw}" y="${H * 0.045 + 62}" width="${pw}" height="60" rx="30" fill="${t.glassFill}"${pillStroke}/><text x="${W - 64 - pw / 2}" y="${H * 0.045 + 103}" text-anchor="middle" font-size="32" font-weight="700" fill="${t.light ? t.ink : t.accent}">${esc(pill)}</text></g>`;
+      }
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+        <style>${BASE_CSS}</style>
+        <defs>
+          <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${t.accent}"/><stop offset="1" stop-color="${t.accent2}"/></linearGradient>
+          <linearGradient id="barf" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${t.accent2}" stop-opacity="0.65"/><stop offset="1" stop-color="${t.accent}"/></linearGradient>
+          <linearGradient id="glassFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t.glassFill}"/><stop offset="1" stop-color="${t.glassFill}" stop-opacity="0.55"/></linearGradient>
+          <linearGradient id="glassStroke" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t.glassStroke}"/><stop offset="1" stop-color="${t.glassStroke}" stop-opacity="0.35"/></linearGradient>
+          <linearGradient id="areaFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${t.accent}" stop-opacity="0.45"/><stop offset="1" stop-color="${t.accent}" stop-opacity="0"/></linearGradient>
+        </defs>
+        ${(transparentShell || bareShell) ? '' : `<rect width="${W}" height="${H}" fill="${bgFlat}"/>
+        <g stroke="${t.grid}" stroke-width="1" opacity="0.15">${gridLines}</g>
+        <g opacity="0.06">${candleWatermark(t, W, H)}</g>`}
+        ${bareShell ? '' : `<g class="fade">
+          <text x="${W * 0.083}" y="${H * 0.058 + 96}" font-size="${Math.round(W * 0.031)}" fill="${t.accent}" font-weight="800" letter-spacing="${Math.round(W * 0.004)}">陆新研究：个人观点</text>
+        </g>`}
+        ${pillSvg}
+        <g ${contentTransform}>${inner}</g>
+      </svg>`;
+    }
+
+    // ---- KPI：Odometer 机械滚轮 ----
+    let _svgUid = 0;
+    // 数字+单位整组排版：按总宽自适应字号并整组居中（数字左移让位，单位不再被顶出环形/面板）
+    function numUnitFitSize(main, unit, maxW, capSize) {
+      const s = String(main);
+      const dg = s.replace(/[^0-9]/g, '').length;
+      const ot = s.length - dg;
+      const ul = unit ? String(unit).length : 0;
+      const coef = dg * 0.72 + ot * 0.34 + (ul ? 0.42 * ul + 0.1 : 0);
+      const ladder = s.length <= 2 ? capSize : s.length === 3 ? Math.round(capSize * 0.79) : s.length === 4 ? Math.round(capSize * 0.66) : Math.round(capSize * 0.54);
+      return Math.min(ladder, Math.floor(maxW / coef));
+    }
+    function numUnitAt(main, unit, size) {
+      const s = String(main);
+      const dg = s.replace(/[^0-9]/g, '').length;
+      const ot = s.length - dg;
+      const ul = unit ? String(unit).length : 0;
+      const unitSize = ul ? Math.round(size * 0.42) : 0;
+      return {
+        numW: dg * Math.round(size * 0.72) + ot * Math.round(size * 0.34),
+        gap: ul ? Math.round(size * 0.1) : 0,
+        unitSize,
+        unitW: ul ? unitSize * ul : 0
+      };
+    }
+    function numUnitLayout(main, unit, maxW, capSize) {
+      const size = numUnitFitSize(main, unit, maxW, capSize);
+      return Object.assign({ size }, numUnitAt(main, unit, size));
+    }
+    // 共享文本测量：CJK 全宽，数字/ASCII/标点半宽（与 hormozi tokenW 口径一致）
+    function textW(s, size) {
+      let w = 0;
+      for (const ch of String(s)) w += /[\u4e00-\u9fa5！？，。、；：…]/.test(ch) ? size : size * 0.56;
+      return w;
+    }
+    // 返回使 text 适配 maxW 的最大字号（上限 baseSize，下限 minSize）——所有卡片共用，保证"内容驱动排布"口径统一
+    function fitSize(text, maxW, baseSize, minSize) {
+      const w = textW(text, baseSize);
+      if (w <= maxW) return baseSize;
+      return Math.max(minSize || 24, Math.floor(baseSize * maxW / w));
+    }
+    // 生成滚轮数字组：每位数字一列竖排带，数字沿 +y 排布，动画整体上移使目标格滑入窗口
+    // 个位圈数是十位的 10 倍（不同圈数）→ 同时长下个位速度约为十位 10 倍；滚完即定格，不加弹跳
+    function odometer(str, cx, by, size, color) {
+      const cell = Math.round(size * 1.12);
+      const colW = Math.round(size * 0.72);
+      const chars = String(str).split('');
+      const widths = chars.map(ch => /[0-9]/.test(ch) ? colW : Math.round(size * 0.34));
+      const totalW = widths.reduce((a, b) => a + b, 0);
+      let x = cx - totalW / 2;
+      let out = `<g transform="translate(0 ${by})">`;
+      chars.forEach((ch, i) => {
+        const w = widths[i];
+        if (/[0-9]/.test(ch)) {
+          const d = parseInt(ch);
+          const posRight = chars.length - 1 - i; // 0 = 个位
+          const spins = posRight === 0 ? 10 : 1; // 个位 10 圈，其余 1 圈
+          const dur = [0.9, 1.05, 1.15, 1.25][Math.min(posRight, 3)];
+          const m = d + 10 * spins; // 目标格序号（含整圈），目标格数字 = m % 10 = d
+          const uid = 'odc' + (_svgUid++);
+          const cols = Array.from({ length: m + 1 }, (_, k) =>
+            `<text x="${x + w / 2}" y="${k * cell}" text-anchor="middle" font-size="${size}" class="numfont" fill="${color}">${k % 10}</text>`).join('');
+          // 裁剪窗口只露出定格格位：数字无降部，上下窗口沿均避开相邻格
+          out += `<defs><clipPath id="${uid}"><rect x="${x - 6}" y="${-Math.round(size * 0.85)}" width="${w + 12}" height="${Math.round(size * 1.13)}"/></clipPath></defs>`;
+          out += `<g clip-path="url(#${uid})"><g class="odoCol" style="--d:-${m * cell}px;--dur:${dur}s;--dl:${(0.12 + i * 0.05).toFixed(2)}s">${cols}</g></g>`;
+        } else {
+          out += `<text x="${x + w / 2}" y="0" text-anchor="middle" font-size="${Math.round(size * 0.9)}" class="numfont" fill="${color}">${esc(ch)}</text>`;
+        }
+        x += w;
+      });
+      out += '</g>';
+      return out;
+    }
+
+    function renderKPI(card) {
+      const t = themeForCard(card);
+      const k = card.kpi;
+      if (!k) return renderTitle({ text: card.text || '' });
+      const d = { main: String(k.num), unit: (((k.unit === '％' ? '%' : (k.unit || '')) || ((/%|％/.test(card.text || '')) ? '%' : '')) || measUnitOf(card.text || '', String(k.num))) };
+      const dir = card.dir;
+      const color = dir === 'up' ? t.accent2 : (dir === 'down' ? t.danger : t.accent);
+      const pctTarget = (k.unit === '%' || k.unit === '％' || k.unit === '个百分点') ? Math.max(0, Math.min(k.num, 100)) : 72;
+      const ringTo = 1000 - (1000 * pctTarget / 100);
+      // ===== 大号加减符号贴在数字前面（财务写法 −3.2亿 / +12.4亿）=====
+      // 负号不再交给滚轮渲染（小且无动效），统一由彩色大符号表达，避免双负号
+      const showSym = dir === 'up' || dir === 'down';
+      const absMain = d.main.replace(/^[-−+]/, '');
+      const nl = numUnitLayout(absMain, d.unit, showSym ? 370 : 490, 280);
+      const size = nl.size;
+      const symSize = size; // 与数字等大：金融大数字前的涨跌号要跟数据大小配得上，够醒目
+      const symW = showSym ? Math.round(symSize * 0.6) : 0;
+      const symGap = showSym ? 14 : 0;
+      // 符号+数字+单位整组居中：符号在最左，紧跟数字，单位收尾
+      const totalW = symW + symGap + nl.numW + nl.gap + nl.unitW;
+      const leftX = 540 - totalW / 2;
+      const numCx = leftX + symW + symGap + nl.numW / 2;
+      const unitX = numCx + nl.numW / 2 + nl.gap + nl.unitW / 2;
+      const by = 860 + Math.round(size * 0.33);
+      const symFill = dir === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : (t.light ? '#e0303a' : '#ff4d4f');
+      const ring = `<g transform="translate(540 860)"><circle r="290" fill="none" stroke="${t.sub}" stroke-opacity="0.20" stroke-width="46" transform="rotate(-90)"/><circle r="290" fill="none" stroke="url(#acc)" stroke-width="46" stroke-linecap="round" pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" style="--to:${ringTo}" class="ringSweep" transform="rotate(-90)"/></g>`;
+      const panel = glassPanel(90, 380, 900, 800, 44);
+      const inner = `<g class="fade">
+        ${panel}
+        ${industryBadge(card, t)}
+        <text x="540" y="500" text-anchor="middle" font-size="56" font-weight="800" fill="${t.sub}" letter-spacing="10">${esc(card.label)}</text>
+        ${ring}
+        ${odometer(absMain, numCx, by, size, color)}
+        ${d.unit ? `<text x="${unitX.toFixed(0)}" y="${by - Math.round(size * 0.15)}" text-anchor="middle" font-size="${nl.unitSize}" font-weight="800" class="numfont" fill="${t.ink}" fill-opacity="0.92">${esc(d.unit)}</text>` : ''}
+        ${showSym ? `<g class="${dir === 'up' ? 'arrowNudge' : 'arrowNudgeD'}" style="animation-delay:1.3s"><text x="${(leftX + symW / 2).toFixed(0)}" y="${by - Math.round(size * 0.04)}" text-anchor="middle" font-size="${symSize}" font-weight="900" fill="${symFill}" style="animation:deltaPop .7s cubic-bezier(.2,1.5,.4,1) .5s both">${dir === 'down' ? '−' : '+'}</text></g>` : ''}
+        ${bottomCaption(card, { fill: t.ink, delay: 0.3 })}
+      </g>`;
+      return svgShell(inner, { card });
+    }
+
+    // ---- 条形图竞赛（Bar Chart Race）：降序排位，行自底部滑入，第 1 名数值带脉冲光晕 ----
+    function renderBar(card) {
+      const t = themeForCard(card);
+      const nums = (card.nums || []).slice(0, 6);
+      if (nums.length < 1) return renderTitle({ text: card.text || '' });
+      const n = nums.length;
+      // 渲染层标签校正：陈旧 localStorage 卡里的“第N项/上期/本期/去年/今年”占位标签，按原文重提“营收/利润”真指标词，刷新即生效
+      let labels0 = (card.labels || []).slice(0, 6);
+      const unclean = l => /^第\d+项$|^(上期|本期|去年|今年|同期|上年|往年)$|(?:跌了?|掉|砍了?|涨了?|增|降了?|少了|减少|缩水)$/.test(String(l || '').trim());
+      if (labels0.length && labels0.every(unclean)) {
+        const re = labelsForSeries(card.text || '', card.unit || '', n);
+        if (re && re.some(x => !unclean(x))) labels0 = re.slice(0, n);
+      }
+      const d = dirOfCard(card);
+      const rows = nums.map((v, i) => ({ v, label: labels0[i] || '第' + (i + 1) + '项' }))
+        .sort((a, b) => b.v - a.v);
+      const max = rows[0].v * 1.08 || 1;
+      const trackX = 130, trackW = 820;
+      // 财经条卡：块体加高、垂直居中，刻度轴与字幕板自下而上排布，杜绝遮挡
+      const topY = 665;
+      const rowH = n === 1 ? 300 : Math.max(120, Math.min(230, Math.floor(760 / Math.min(n, 4))));
+      const barH = Math.max(34, Math.round(rowH * 0.34));
+      const blockBottom = topY + (n - 1) * rowH + 62 + barH;
+      // 财经刻度轴：块底淡基线与 0/25/50/75/100 刻度，坐标参照感
+      const axisY = blockBottom + 26;
+      const axisLabelBottom = axisY + 42;
+      const pctAxis = `<g opacity=\"0.55\">
+        <line x1=\"${trackX}\" y1=\"${axisY}\" x2=\"${trackX + trackW}\" y2=\"${axisY}\" stroke=\"${t.grid}\" stroke-width=\"2\"/>
+        ${[0, 25, 50, 75, 100].map(p => {
+          const gx = trackX + trackW * p / 100;
+          return `<line x1=\"${gx.toFixed(0)}\" y1=\"${axisY - 9}\" x2=\"${gx.toFixed(0)}\" y2=\"${axisY + 9}\" stroke=\"${t.grid}\" stroke-width=\"2\"/>` +
+            `<text x=\"${gx.toFixed(0)}\" y=\"${axisLabelBottom}\" text-anchor=\"middle\" font-size=\"26\" fill=\"${t.sub}\">${p}%</text>`;
+        }).join('')}
+      </g>`;
+      // 字幕锚点：由刻度标签底线反推，保证字幕板顶永远压在刻度之下，任何行长都不与刻度重叠
+      const cRaw = condenseCaption(card.text || '');
+      let cSize = 44, cPer = 19; let cLines = wrapText(cRaw, cPer);
+      if (cLines.length > 4) { cSize = 38; cPer = 22; cLines = wrapText(cRaw, cPer); }
+      const cLh = Math.round(cSize * 1.3);
+      const capY = Math.round(axisLabelBottom + 40 + cSize * 1.02 + 22 + (cLines.length - 1) * cLh);
+      // 数值右对齐 x=950、标签左对齐（无条前涨跌三角）
+      const labelX = trackX;
+      const maxLabelW = Math.max(...rows.map(r => textW(String(r.label).slice(0, 8), 44)));
+      const valMaxW = Math.max(240, 950 - (labelX + maxLabelW) - 24);
+      const valSize = Math.max(36, Math.min(52, fitSize(String(rows[0].v) + (card.unit || ''), valMaxW, 52, 36)));
+      // 涨跌方向色：下跌=绿、增长=红（金融惯例，跌红涨绿的相反约定由主题驱动底色，此处定数值色与正负号）
+      const gapc = d === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : d === 'up' ? (t.light ? '#e0303a' : '#ff4d4f') : t.ink;
+      let out = `<text x=\"540\" y=\"540\" text-anchor=\"middle\" font-size=\"66\" font-weight=\"900\" fill=\"${t.ink}\" class=\"fade\">${esc(card.title || '数据排行')}</text>`;
+      out += industryBadge(card, t);
+      rows.forEach((r, i) => {
+        const y = topY + i * rowH;
+        const rd = (i * 0.14).toFixed(2);
+        const w = Math.max(14, (Math.abs(r.v) / max) * trackW);
+        const isTop = i === 0;
+        // 正负号：下跌前缀'-'、增长前缀'+'、中性不加；数值本身已是负数则不再重复加号
+        const prefix = r.v < 0 ? '' : (d === 'down' ? '-' : d === 'up' ? '+' : '');
+        out += `<g class=\"raceRow\" style=\"--from:760px;--rd:${rd}s\">
+          <g style=\"animation:fade .5s ease ${(0.5 + i * 0.14).toFixed(2)}s both\">
+            <text x=\"${labelX}\" y=\"${y + 44}\" font-size=\"44\" font-weight=\"800\" fill=\"${isTop ? t.accent : t.ink}\">${esc(r.label)}</text></g>
+          <text x=\"950\" y=\"${y + 48}\" text-anchor=\"end\" font-size=\"${valSize}\" font-weight=\"900\" class=\"numfont\" fill=\"${gapc}\" style=\"animation:fade .5s ease ${(0.6 + i * 0.14).toFixed(2)}s both\">${prefix}${Math.abs(r.v)}${esc(card.unit || '')}</text>
+          <rect x=\"${trackX}\" y=\"${y + 62}\" width=\"${trackW}\" height=\"${barH}\" rx=\"${Math.round(barH / 2)}\" fill=\"${t.glassFill}\" stroke=\"${t.glassStroke}\" stroke-width=\"2\"/>
+          <rect x=\"${trackX}\" y=\"${y + 62}\" width=\"${w}\" height=\"${barH}\" rx=\"${Math.round(barH / 2)}\" fill=\"url(#barf)\" class=\"raceBar\" style=\"--rd:${rd}s;--w:${Math.round(w)}px\"/>
+        </g>`;
+      });
+      out += pctAxis;
+      out += bottomCaption(card, { y: capY });
+      return svgShell(`<g class=\"fade\">${out}</g>`, { card });
+    }
+    // ---- 发光面积图（Glowing Area）：霓虹三层描边 + 渐变面积 + lineDraw 从左至右绘制 ----
+    function renderLine(card) {
+      const t = themeForCard(card);
+      const nums = card.nums || [],
+        labels = card.labels || [];
+      if (nums.length < 2) return renderTitle({ text: card.text || '' });
+      // 折线方向优先看数据本身：末值 vs 首值（真涨真跌），无数据差异再回落文案判定
+      const ldir = (card.dir === 'up' || card.dir === 'down') ? card.dir
+        : (nums[nums.length - 1] > nums[0] ? 'up' : nums[nums.length - 1] < nums[0] ? 'down' : trendDir(card.text || ''));
+      const max = Math.max(...nums) * 1.15,
+        min = Math.min(...nums) * 0.85;
+      const n = nums.length,
+        startX = 130,
+        endX = 950,
+        baseY = 1100,
+        topY = 620;
+      const pts = nums.map((v, i) => ({ x: startX + (endX - startX) * i / (n - 1), y: baseY - (v - min) / (max - min) * (
+          baseY - topY), v }));
+      const path = pts.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+      const area = path + ` L ${pts[n-1].x} ${baseY} L ${pts[0].x} ${baseY} Z`;
+      // 数值标签居中于各点：按相邻点间距自适应字号，避免近平直线时数值横向重叠
+      const spacing = (endX - startX) / (n - 1);
+      const longestVal = nums.map(v => String(v) + (card.unit || '')).reduce((a, b) => a.length >= b.length ? a : b);
+      const valSize = Math.max(30, Math.min(42, fitSize(longestVal, Math.max(90, spacing - 20), 42, 30)));
+      const longestLab = labels.map(l => String(l)).reduce((a, b) => a.length >= b.length ? a : b, '');
+      const labSize = Math.max(28, Math.min(38, fitSize(longestLab, Math.max(80, spacing - 16), 38, 28)));
+      let dots = '',
+        vals = '',
+        labs = '';
+      pts.forEach((p, i) => {
+        const last = i === n - 1;
+        dots +=
+          `<circle cx="${p.x}" cy="${p.y}" r="${last ? 17 : 11}" fill="${mixHex(t.bg1, t.bg2)}" stroke="${last ? t.accent2 : t.accent}" stroke-width="${last ? 8 : 6}" class="pop" style="animation-delay:${(0.95 + i * 0.1).toFixed(2)}s"/>`;
+        vals +=
+          `<text x="${p.x}" y="${p.y-34}" text-anchor="middle" font-size="${valSize}" font-weight="800" class="numfont" fill="${last ? t.accent2 : t.ink}" style="animation:fade .5s ease ${(1.0 + i * 0.1).toFixed(2)}s both">${p.v}${esc(card.unit||'')}</text>`;
+        labs +=
+          `<text x="${p.x}" y="${baseY+56}" text-anchor="middle" font-size="${labSize}" font-weight="700" fill="${t.sub}">${esc(labels[i]||'')}</text>`;
+      });
+      const inner =
+        `<g class="fade"><text x="540" y="400" text-anchor="middle" font-size="62" font-weight="900" fill="${t.ink}">${esc(card.title || '趋势')}</text>
+        ${industryBadge(card, t)}
+        <path d="${area}" fill="url(#areaFade)" style="animation:fade .8s ease .9s both"/>
+        <path d="${path}" fill="none" stroke="${t.accent}" stroke-width="26" stroke-opacity="0.15" stroke-linecap="round" stroke-linejoin="round" pathLength="1000" style="--to:0;animation:lineDraw 1.6s ease .25s both"/>
+        <path d="${path}" fill="none" stroke="${t.accent}" stroke-width="13" stroke-opacity="0.32" stroke-linecap="round" stroke-linejoin="round" pathLength="1000" style="--to:0;animation:lineDraw 1.6s ease .25s both"/>
+        <path d="${path}" fill="none" stroke="url(#acc)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" pathLength="1000" style="--to:0" class="lineDraw"/>${dots}${vals}${labs}</g>
+        ${bottomCaption(card, {})}`;
+      return svgShell(inner, { card });
+    }
+
+    // ---- Hormozi 字幕：白字 + 粗黑描边，关键词霓虹黄高亮，逐词打字机入场 ----
+    const HL_WORDS = /涨|跌|增|降|升|突破|新高|风险|机会|拐点|翻|倍|盈利|亏损|爆发|万亿|亿|万|%|％|增速|增长|下滑|回落|关键|核心|注意|记住|结论|建议/;
+    // 叙事金句里"抓人"的关键名词：命中即高亮，让重点从白字中跳出来
+    // 注意：只放 2 字以上完整词，避免单字命中造成"药撑""的命"这类半词误高亮
+    const HL_NARR = /命脉|上市公司|撑起|翻盘|逆袭|起飞|爆雷|腰斩|躺赚|暴利|垄断|卡脖子|龙头|霸主|天花板|护城河|红利|风口|洗牌|出清|红利期|黄金期|寒冬|春天|生死|成败|输赢|赢家|输家|大赚|血亏|疯抢|抢疯|卖爆|卖疯|脱销|断货|排队|抢购|降价|涨价|暴跌|暴涨|命根子|命门/;
+    // 从文案中提取"主体/公司名"（供高亮）：取指标词前的主语，或"百济"这类专有名词
+    function subjectOf(s) {
+      const x = String(s || '').replace(/\s/g, '');
+      // 优先：指标词前的 2~6 字主语（"百济的营收"→百济）
+      for (const kw of ['营收', '利润', '销量', '渗透率', '市占率', '股价', '市值', '融资', '订单', '增速', '规模', '收入', '净利润', '毛利率']) {
+        const i = x.indexOf(kw);
+        if (i > 0) {
+          const head = (x.slice(Math.max(0, i - 8), i).split(/[，,、。；：的]/).pop() || '').replace(/^(?:今年|去年|前年|本|这|那|其|该|我们|他们|咱们|大家)/, '');
+          if (head.length >= 2 && head.length <= 6) return head;
+        }
+      }
+      // 句尾主体："就是XX的命/命脉/天下/生死"、"XX的拐点" → 提取 XX（不含"的"）
+      const tail = (x.match(/(?:就是|便是|是|关乎|决定|取决于)([\u4e00-\u9fa5]{2,6}?)(?:的)?(?:命|命脉|生死|成败|天下|未来|命运|拐点|胜负)/) || [])[1];
+      if (tail && !/^(?:这个|那个|我们|他们|咱们|大家|所有|整个|全)/.test(tail)) return tail;
+      // 动词后主体："提XX""看XX""说XX""聊XX" → 提取 XX（"以前大家提百济"→百济）
+      const verb = (x.match(/(?:提|看|说|聊|讲|谈|关注|看好|押注)([\u4e00-\u9fa5]{2,6})[，,。；！？]?/) || [])[1];
+      if (verb && !/^(?:这个|那个|我们|他们|咱们|大家|所有|整个|全|以前|现在|目前|今天|今年|去年)/.test(verb)) return verb;
+      // 次优：句首 2~6 字专有名词（"百济""比亚迪"），排除口播水词
+      const lead = (x.match(/^([\u4e00-\u9fa5]{2,6})[，,是了在的]/) || [])[1];
+      if (lead && !/^(?:大家|我们|你们|他们|咱们|这个|那个|今天|现在|以前|目前|其实|但是|所以|因为|如果|总之|说白了|第一反应|国内|国外|全国|全球|整个|所有)/.test(lead)) return lead;
+      return '';
+    }
+    // 统一高亮判断：数字 / 通用财经词 / 叙事关键词 / 主体公司名
+    function hlToken(tok, card) {
+      if (/^\d/.test(tok)) return true;
+      if (HL_WORDS.test(tok)) return true;
+      if (HL_NARR.test(tok)) return true;
+      // "的命/的命脉/的生死"这类收尾强调词：整词高亮，突出"命"的冲击力
+      if (/^(?:的命|的命脉|的生死|的成败|的天下|的拐点|的胜负)$/.test(tok)) return true;
+      const subj = card && subjectOf(card.text || card.label || '');
+      return subj.length >= 2 && tok.length >= 2 && (subj.includes(tok) || tok.includes(subj));
+    }
+    function hormoziTokens(line, card) {
+      // 数字（含单位）为一个词，ASCII 串为一个词，中文按 2 字切分 → 逐词节奏。
+      // 但 HL_NARR 里的 4 字以上关键词（上市公司/护城河/卡脖子…）先整体保护，避免被切成 2 字半词
+      const prot = [];
+      const subj = card ? subjectOf(card.text || card.label || '') : '';
+      const protectRe = new RegExp('上市公司|护城河|卡脖子|命根子|天花板|黄金期|红利期|翻盘|逆袭|起飞|爆雷|腰斩|躺赚|暴利|垄断|龙头|霸主|洗牌|出清|寒冬|生死|成败|输赢|赢家|输家|大赚|血亏|疯抢|抢疯|卖爆|卖疯|脱销|断货|排队|抢购|降价|涨价|暴跌|暴涨|命脉|撑起' + (subj.length >= 2 ? '|' + subj : ''), 'g');
+      const protectedLine = line.replace(protectRe, m => {
+        prot.push(m);
+        return '\u0001';
+      });
+      const toks = (protectedLine.match(/\d+(?:\.\d+)?(?:%|％|万亿|亿|万|千|倍|个百分点)?|[A-Za-z]+|[\u4e00-\u9fa5]{1,2}|[^\s\dA-Za-z\u4e00-\u9fa5]/g) || []).filter(x => x.trim());
+      // 把占位符换回被保护的关键词
+      let pi = 0;
+      return toks.map(t => t === '\u0001' ? prot[pi++] : t);
+    }
+    function tokenW(tok, size) {
+      let w = 0;
+      for (const ch of tok) w += /[\u4e00-\u9fa5！？，。、；：…]/.test(ch) ? size : size * 0.56;
+      return w;
+    }
+    // ---- 行业识别：文案命中哪个行业，字幕卡就配哪个行业的专属插画 ----
+    const INDUSTRY_LIST = [
+      { key: 'robot', name: '机器人', re: /机器人|机械臂|人形机器人|智能制造|工业机器人|自动化产线/ },
+      { key: 'pv', name: '光伏', re: /光伏|太阳能|硅片|组件|逆变器|光伏电站/ },
+      { key: 'semi', name: '半导体', re: /半导体|芯片|晶圆|光刻|集成电路|中芯|封测|存储芯片|GPU|CPU|制程/ },
+      { key: 'ne', name: '新能源', re: /新能源|电池|电动车|锂电|宁德|比亚迪|充电桩|储能|动力电池|新能源汽车/ },
+      { key: 'baijiu', name: '白酒', re: /白酒|茅台|五粮液|酒企|酿酒|酒业|国窖|泸州老窖|洋河|啤酒|红酒|酒类/ },
+      { key: 'pharma', name: '创新药', re: /创新药|医药|药企|临床|制药|生物医药|疫苗|百济|恒瑞|药明|仿制药|新药|CXO/ },
+      { key: 'ai', name: 'AI', re: /AI|人工智能|大模型|算力|机器学习|深度学习|神经网络|GPT|智能体|AIGC|生成式/ },
+      { key: 'fin', name: '金融', re: /金融|证券|银行|股市|基金|券商|保险|理财|资本|A股|港股|IPO|上市|市值|估值|牛市|熊市/ },
+      { key: 'tech', name: '科技', re: /科技|互联网|软件|云计算|大数据|数字化|平台|IT|程序员|代码|APP|应用|操作系统|服务器|算法/ },
+      { key: 'consumer', name: '消费品', re: /消费品|零售|品牌|超市|快消|食品|饮料|家电|服装|日化|电商|电商平台|购物|消费/ }
+    ];
+    function industryOf(text) {
+      const s = String(text || '');
+      for (const ind of INDUSTRY_LIST) if (ind.re.test(s)) return ind;
+      return null;
+    }
+    // 行业专属配色：命中行业时覆盖主题主色（保留深色底+金色高亮，只换行业气质色）
+    const INDUSTRY_COLORS = {
+      baijiu:   { bg1: '#140d05', bg2: '#3a2410', accent: '#f4c84b', accent2: '#e8a33d', ink: '#fdf6ea', sub: '#b39b7a', danger: '#ff8f5d' },
+      tech:     { bg1: '#060d1a', bg2: '#0d1f3d', accent: '#00d4ff', accent2: '#4f8cff', ink: '#eef4fb', sub: '#7a93b8', danger: '#ff6b6b' },
+      ai:       { bg1: '#0d0818', bg2: '#2a1040', accent: '#a78bfa', accent2: '#7c3aed', ink: '#f3efff', sub: '#9d93bd', danger: '#ff7d9b' },
+      robot:    { bg1: '#06120f', bg2: '#0d2a24', accent: '#00e5a0', accent2: '#00b8d9', ink: '#eef5ef', sub: '#7fa89a', danger: '#ff6b6b' },
+      pharma:   { bg1: '#06130f', bg2: '#0f2e22', accent: '#2fe6a0', accent2: '#00c2a8', ink: '#eef5ef', sub: '#7fa89a', danger: '#ff6b6b' },
+      fin:      { bg1: '#120608', bg2: '#3a0f14', accent: '#ffd24a', accent2: '#ff5d5d', ink: '#fff1f1', sub: '#b78f92', danger: '#ff8f5d' },
+      ne:       { bg1: '#06120a', bg2: '#0f2a14', accent: '#4ade80', accent2: '#22c55e', ink: '#eef5ef', sub: '#7fa88a', danger: '#ff6b6b' },
+      pv:       { bg1: '#141006', bg2: '#33280d', accent: '#ffb347', accent2: '#ff8c42', ink: '#fdf6ea', sub: '#b39b7a', danger: '#ff6b6b' },
+      semi:     { bg1: '#0a0d1a', bg2: '#141b3d', accent: '#60a5fa', accent2: '#818cf8', ink: '#eef4fb', sub: '#7a93b8', danger: '#ff6b6b' },
+      consumer: { bg1: '#170a12', bg2: '#33101f', accent: '#ff7eb6', accent2: '#ff5d8f', ink: '#fdf0f5', sub: '#b78f9e', danger: '#ff6b6b' }
+    };
+    // 取卡片主题：纯情绪主题（涨→红金、跌→墨绿金、中性→深蓝金），行业只影响插画不影响整体配色
+    function themeForCard(card) {
+      return THEMES[themeOfCard(card)];
+    }
+    // 行业专属插画（SVG 图元，图元用行业专属配色，统一 floaty 浮动动画；可指定位置与缩放）
+    function industryIllustration(ind, t, x, y, s) {
+      const ic = INDUSTRY_COLORS[ind.key] || {};
+      const a = ic.accent || t.accent, a2 = ic.accent2 || t.accent2, sub = ic.sub || t.sub;
+      x = x != null ? x : 360; y = y != null ? y : 950; s = s != null ? s : 1;
+      const wrap = (inner) => `<g transform="translate(${x} ${y}) scale(${s})"><g class="floaty">${inner}</g></g>`;
+      switch (ind.key) {
+        case 'baijiu': // 白酒：酒瓶 + 高脚杯
+          return wrap(`
+            <rect x="-120" y="-60" width="92" height="160" rx="16" fill="${a2}" opacity="0.85"/>
+            <rect x="-92" y="-96" width="38" height="40" rx="6" fill="${a2}"/>
+            <rect x="-84" y="-108" width="22" height="16" rx="4" fill="${a}"/>
+            <rect x="-106" y="8" width="64" height="42" rx="8" fill="${a}"/>
+            <path d="M60 -40 L92 -40 L84 58 L68 58 Z" fill="${a}" opacity="0.85"/>
+            <rect x="58" y="-62" width="36" height="24" rx="5" fill="${a2}"/>
+            <rect x="66" y="58" width="20" height="34" rx="5" fill="${a2}"/>
+          `);
+        case 'tech': // 科技：芯片 + 代码尖括号
+          return wrap(`
+            <rect x="-100" y="-70" width="150" height="150" rx="14" fill="${sub}" opacity="0.35"/>
+            <rect x="-78" y="-48" width="106" height="106" rx="10" fill="${a2}" opacity="0.85"/>
+            <rect x="-60" y="-30" width="70" height="70" rx="6" fill="${a}"/>
+            <path d="M-30 -10 L0 10 L-30 30" fill="none" stroke="${a2}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M90 -70 L140 -30 L90 10" fill="none" stroke="${a}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="140" cy="-70" r="10" fill="${a}"/>
+          `);
+        case 'ai': // AI：神经网络节点 + 连线
+          return wrap(`
+            <line x1="-90" y1="-70" x2="0" y2="0" stroke="${a}" stroke-width="4" opacity="0.5"/>
+            <line x1="90" y1="-70" x2="0" y2="0" stroke="${a}" stroke-width="4" opacity="0.5"/>
+            <line x1="-90" y1="70" x2="0" y2="0" stroke="${a}" stroke-width="4" opacity="0.5"/>
+            <line x1="90" y1="70" x2="0" y2="0" stroke="${a}" stroke-width="4" opacity="0.5"/>
+            <circle cx="-90" cy="-70" r="18" fill="${a}"/>
+            <circle cx="90" cy="-70" r="18" fill="${a2}"/>
+            <circle cx="-90" cy="70" r="18" fill="${a2}"/>
+            <circle cx="90" cy="70" r="18" fill="${a}"/>
+            <circle cx="0" cy="0" r="26" fill="${a}"/>
+            <circle cx="0" cy="0" r="14" fill="${a2}"/>
+          `);
+        case 'robot': // 机器人：机器人头 + 天线
+          return wrap(`
+            <rect x="-85" y="-72" width="170" height="140" rx="26" fill="${sub}" opacity="0.4"/>
+            <rect x="-62" y="-50" width="124" height="96" rx="20" fill="${a2}" opacity="0.85"/>
+            <circle cx="-26" cy="-8" r="16" fill="${a}"/>
+            <circle cx="26" cy="-8" r="16" fill="${a}"/>
+            <rect x="-34" y="22" width="68" height="8" rx="4" fill="${a}"/>
+            <line x1="0" y1="-72" x2="0" y2="-104" stroke="${a}" stroke-width="7"/>
+            <circle cx="0" cy="-110" r="11" fill="${a}"/>
+          `);
+        case 'pharma': // 创新药：药瓶 + 试管 + 分子
+          return wrap(`
+            <rect x="-115" y="-52" width="84" height="124" rx="22" fill="${a2}" opacity="0.85"/>
+            <rect x="-92" y="-84" width="40" height="36" rx="6" fill="${a2}"/>
+            <rect x="-84" y="-96" width="24" height="16" rx="4" fill="${a}"/>
+            <circle cx="-73" cy="12" r="15" fill="${a}"/>
+            <path d="M42 -92 L74 -92 L74 38 A16 16 0 0 1 42 38 Z" fill="none" stroke="${a}" stroke-width="6"/>
+            <path d="M45 18 A13 13 0 0 0 71 18 Z" fill="${a}" opacity="0.7"/>
+            <circle cx="128" cy="-44" r="11" fill="${a}"/>
+            <circle cx="150" cy="-12" r="11" fill="${a2}"/>
+            <line x1="128" y1="-44" x2="150" y2="-12" stroke="${a}" stroke-width="4"/>
+          `);
+        case 'fin': // 金融：K线 + 上升趋势 + 货币符号
+          return wrap(`
+            <rect x="-92" y="-18" width="26" height="82" fill="${a2}"/>
+            <line x1="-79" y1="-48" x2="-79" y2="-18" stroke="${a2}" stroke-width="5"/>
+            <line x1="-79" y1="64" x2="-79" y2="82" stroke="${a2}" stroke-width="5"/>
+            <rect x="-30" y="-58" width="26" height="104" fill="${a}"/>
+            <line x1="-17" y1="-78" x2="-17" y2="-58" stroke="${a}" stroke-width="5"/>
+            <line x1="-17" y1="46" x2="-17" y2="64" stroke="${a}" stroke-width="5"/>
+            <path d="M-130 84 L-52 24 L30 -28 L120 -84" fill="none" stroke="${a}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="96" y="24" font-size="88" font-weight="900" fill="${a}" text-anchor="middle">¥</text>
+          `);
+        case 'ne': // 新能源：电池 + 闪电
+          return wrap(`
+            <rect x="-112" y="-62" width="164" height="114" rx="16" fill="${sub}" opacity="0.4"/>
+            <rect x="-92" y="-42" width="124" height="74" rx="10" fill="${a2}" opacity="0.85"/>
+            <rect x="-30" y="-78" width="42" height="20" rx="5" fill="${a}"/>
+            <rect x="-80" y="-30" width="15" height="50" rx="3" fill="${a}"/>
+            <rect x="65" y="-30" width="15" height="50" rx="3" fill="${a}"/>
+            <path d="M44 -84 L12 -12 L44 -12 L12 66" fill="none" stroke="${a}" stroke-width="11" stroke-linejoin="round"/>
+          `);
+        case 'pv': // 光伏：太阳能板 + 太阳
+          return wrap(`
+            <rect x="-112" y="-42" width="184" height="124" rx="10" fill="${sub}" opacity="0.4"/>
+            <rect x="-96" y="-26" width="152" height="92" rx="6" fill="${a2}" opacity="0.85"/>
+            <line x1="-20" y1="-26" x2="-20" y2="66" stroke="${a}" stroke-width="5"/>
+            <line x1="56" y1="-26" x2="56" y2="66" stroke="${a}" stroke-width="5"/>
+            <line x1="-96" y1="20" x2="56" y2="20" stroke="${a}" stroke-width="5"/>
+            <circle cx="118" cy="-66" r="30" fill="${a}"/>
+            <g stroke="${a}" stroke-width="7" stroke-linecap="round">
+              <line x1="118" y1="-112" x2="118" y2="-96"/><line x1="118" y1="-36" x2="118" y2="-20"/>
+              <line x1="72" y1="-66" x2="88" y2="-66"/><line x1="148" y1="-66" x2="164" y2="-66"/>
+            </g>
+          `);
+        case 'semi': // 半导体：晶圆 + 芯片
+          return wrap(`
+            <circle cx="-55" cy="0" r="92" fill="${sub}" opacity="0.35"/>
+            <circle cx="-55" cy="0" r="72" fill="${a2}" opacity="0.5"/>
+            <circle cx="-55" cy="0" r="42" fill="${a2}" opacity="0.85"/>
+            <rect x="58" y="-72" width="124" height="124" rx="12" fill="${a}"/>
+            <rect x="74" y="-56" width="92" height="92" rx="8" fill="${a2}"/>
+            <rect x="52" y="-56" width="12" height="22" fill="${a}"/>
+            <rect x="52" y="10" width="12" height="22" fill="${a}"/>
+            <rect x="176" y="-56" width="12" height="22" fill="${a}"/>
+            <rect x="176" y="10" width="12" height="22" fill="${a}"/>
+            <rect x="74" y="-78" width="22" height="12" fill="${a}"/>
+            <rect x="144" y="-78" width="22" height="12" fill="${a}"/>
+            <rect x="74" y="66" width="22" height="12" fill="${a}"/>
+            <rect x="144" y="66" width="22" height="12" fill="${a}"/>
+          `);
+        case 'consumer': // 消费品：购物袋 + 商品
+          return wrap(`
+            <path d="M-92 -40 L-72 -92 L72 -92 L92 -40 L82 92 L-82 92 Z" fill="${a2}" opacity="0.85"/>
+            <path d="M-92 -40 L92 -40" stroke="${a}" stroke-width="7"/>
+            <path d="M-52 -92 Q0 -144 52 -92" fill="none" stroke="${a}" stroke-width="9"/>
+            <circle cx="-32" cy="22" r="21" fill="${a}"/>
+            <rect x="8" y="2" width="42" height="42" rx="7" fill="${a}"/>
+            <rect x="62" y="12" width="30" height="30" rx="15" fill="${a}"/>
+          `);
+        default:
+          return '';
+      }
+    }
+
+    // 数据卡右上角行业小徽标（统一位置，不干扰主内容）
+    function industryBadge(card, t) {
+      const ind = industryOf(card.text || card.label || '');
+      return ind ? industryIllustration(ind, t, 940, 275, 0.38) : '';
+    }
+
+    function renderTitle(card) {
+      const t = themeForCard(card);
+      const text = String(card.text || card.label || '').replace(/\s+/g, '');
+      const size = text.length <= 14 ? 108 : text.length <= 26 ? 88 : text.length <= 44 ? 76 : 64;
+      const maxChars = Math.max(5, Math.floor(960 / size) - 1);
+      let ls = wrapText(text, maxChars);
+      if (ls.length > 5) { ls = ls.slice(0, 5);
+        ls[4] = ls[4].replace(/[，。！？、；：,:]+$/, '') + '…'; }
+      const lh = Math.round(size * 1.32);
+      const startY = 800 - Math.round((ls.length - 1) * lh / 2);
+      const strokeW = Math.max(3, Math.round(size * 0.05)); // 3~5px 粗黑描边
+      let seq = 0, body = '';
+      ls.forEach((ln, li) => {
+        const toks = hormoziTokens(ln, card);
+        const totalW = toks.reduce((s, k) => s + tokenW(k, size), 0);
+        let x = 540 - totalW / 2;
+        toks.forEach(tok => {
+          const w = tokenW(tok, size);
+          const hl = hlToken(tok, card);
+          const td = Math.min(0.15 + seq * 0.09, 2.2);
+          body +=
+            `<text x="${(x + w / 2).toFixed(1)}" y="${startY + li * lh}" text-anchor="middle" font-size="${size}" font-weight="900" fill="${hl ? t.hl : '#FFFFFF'}" stroke="#000000" stroke-width="${strokeW}" stroke-linejoin="round" paint-order="stroke" class="tw" style="--td:${td.toFixed(2)}s">${esc(tok)}</text>`;
+          x += w;
+          seq++;
+        });
+      });
+      // 简单插画
+      // 行业专属插画：命中行业则用对应图元，否则回退到通用插画
+      const ind = industryOf(card.text || card.label || '');
+      let ill = ind ? industryIllustration(ind, t) : '';
+      if (!ill) {
+        if (/(涨|增|升|上涨|增长|上升|突破|翻)/.test(card.text)) {
+          ill =
+            `<g transform="translate(300 940)"><g class="floaty"><rect x="40" y="60" width="36" height="96" rx="8" fill="${t.accent2}"/><rect x="96" y="130" width="36" height="26" rx="8" fill="${t.accent2}" opacity="0.7"/><path d="M40 96 H130" stroke="${t.accent}" stroke-width="8" stroke-linecap="round"/><path d="M60 80 L240 40 L360 120" fill="none" stroke="url(#acc)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/><path d="M360 120 L300 96 L340 150 Z" fill="${t.accent}"/></g></g>`;
+        } else if (/(钱|资金|投资|融资|利润|营收|盈利)/.test(card.text)) {
+          let c = '';
+          for (let i = 0; i < 3; i++) c +=
+            `<ellipse cx="${160+i*30}" cy="${200-i*74}" rx="92" ry="30" fill="${t.accent}" class="pulse" style="animation-delay:${i*0.2}s"/>`;
+          ill = `<g transform="translate(360 960)"><g class="floaty">${c}</g></g>`;
+        } else {
+          let b = '';
+          const hs = [200, 320, 140, 260, 180];
+          hs.forEach((h, i) => { b +=
+              `<rect x="${i*116}" y="${360-h}" width="90" height="${h}" rx="10" fill="${t.sub}" opacity="0.25" class="barGrow" style="animation-delay:${i*0.12}s;transform-origin:center bottom"/>`; });
+          ill =
+            `<g transform="translate(220 880) scale(0.72)"><g>${b}<path d="M0 360 H580" stroke="${t.accent}" stroke-width="10"/><path d="M500 360 L600 90 L700 280" fill="none" stroke="url(#acc)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/></g></g>`;
+        }
+      }
+      return svgShell(`<g>${body}${ill}</g>`, { card });
+    }
+
+    // ---- 排行榜：金银铜名次徽章 + 逐行右滑入场，冠军数值脉冲光晕 ----
+    function renderRank(card) {
+      const t = themeForCard(card);
+      const nums = (card.nums || []).slice(0, 5);
+      const labels = (card.labels || []).slice(0, 5);
+      if (nums.length < 1) return renderTitle({ text: card.text || '' });
+      const rows = nums.map((v, i) => ({ v, label: labels[i] || '第' + (i + 1) + '项' }))
+        .sort((a, b) => b.v - a.v);
+      const medal = ['#FFD54A', '#DCE3EE', '#E8A46B'];
+      const n = rows.length;
+      const topY = 500, areaH = 680;
+      const rowH = Math.min(230, areaH / n);
+      // 标签左对齐 x=292、数值右对齐 x=950：长标签+长数值会重叠。
+      // 先按"数值至少留 220px"截断标签，再按最宽标签的剩余空间自适应数值字号
+      const LABEL_X = 292, VAL_X = 950;
+      const labelMaxW = VAL_X - LABEL_X - 220;
+      rows.forEach(r => {
+        let s = String(r.label);
+        if (s.length > 8) s = s.slice(0, 8) + '…';
+        while (s.length > 1 && textW(s + '…', 50) > labelMaxW) s = s.slice(0, -1);
+        r.label = s;
+      });
+      const maxLabelW = Math.max(...rows.map(r => textW(r.label, 50)));
+      const valMaxW = Math.max(180, VAL_X - (LABEL_X + maxLabelW) - 24);
+      const topSize = Math.max(40, Math.min(76, fitSize(String(rows[0].v) + (card.unit || ''), valMaxW, 76, 40)));
+      const rowSize = Math.max(36, Math.min(62, fitSize(String(rows[0].v) + (card.unit || ''), valMaxW, 62, 36)));
+      let out = `<text x="540" y="400" text-anchor="middle" font-size="62" font-weight="900" fill="${t.ink}" class="fade">${esc(card.title || '排行榜')}</text>`;
+      out += industryBadge(card, t);
+      rows.forEach((r, i) => {
+        const y = topY + i * rowH;
+        const mc = i < 3 ? medal[i] : t.sub;
+        const rd = (i * 0.16).toFixed(2);
+        const isTop = i === 0;
+        out += `<g class="slideL" style="--rd:${rd}s">
+          <circle cx="196" cy="${y + 86}" r="${isTop ? 68 : 58}" fill="${i < 3 ? mc : t.glassFill}" fill-opacity="${i < 3 ? 1 : 0.9}" stroke="${i < 3 ? mc : t.glassStroke}" stroke-width="3"/>
+          <text x="196" y="${y + 86 + (isTop ? 26 : 22)}" text-anchor="middle" font-size="${isTop ? 72 : 60}" font-weight="900" class="numfont" fill="${i < 3 ? '#1B2233' : t.ink}">${i + 1}</text>
+          <text x="292" y="${y + 70}" font-size="50" font-weight="800" fill="${isTop ? t.accent : t.ink}">${esc(r.label)}</text>
+          <text x="292" y="${y + 138}" font-size="34" font-weight="700" fill="${t.sub}">第 ${i + 1} 位</text>
+          <text x="950" y="${y + 108}" text-anchor="end" font-size="${isTop ? topSize : rowSize}" font-weight="900" class="numfont" fill="${isTop ? t.accent : t.ink}" style="animation:fade .5s ease ${(0.65 + i * 0.16).toFixed(2)}s both">${r.v}${esc(card.unit || '')}</text>
+        </g>`;
+      });
+      out += bottomCaption(card, {});
+      return svgShell(`<g class="fade">${out}</g>`, { card });
+    }
+
+    // ---- VS 对比卡：左右玻璃面板 + 中央斜置 VS 徽章，双数值滚轮 ----
+    function renderVS(card) {
+      const t = themeForCard(card);
+      const L = card.left || { label: '甲方', value: 0, unit: '' };
+      const R = card.right || { label: '乙方', value: 0, unit: '' };
+      const panelL = glassPanel(90, 470, 400, 700, 40);
+      const panelR = glassPanel(590, 470, 400, 700, 40);
+      // 两侧共享同一字号（取各自适配结果的较小值），数字+单位整组在面板内居中；
+      // 可用宽 280：徽章 r=96 左缘 x=444，整组右缘 290+140=430 与之保持 ≥14px 间隙
+      let numSize = Math.max(84, Math.min(150, numUnitFitSize(L.value, L.unit, 280, 150), numUnitFitSize(R.value, R.unit, 280, 150)));
+      // 大数字（≥5 位）整组实际宽度会因逐位取整超出 280，导致单位被徽章遮挡；
+      // 按 numUnitAt 实测半宽等比缩小，直到两侧整组都落在安全区（半宽 ≤140）
+      const SAFE_HALF = 140;
+      let guard = 0;
+      while (guard++ < 6) {
+        const la = numUnitAt(L.value, L.unit, numSize);
+        const ra = numUnitAt(R.value, R.unit, numSize);
+        const maxHalf = Math.max(la.numW / 2 + la.gap + la.unitW, ra.numW / 2 + ra.gap + ra.unitW);
+        if (maxHalf <= SAFE_HALF || numSize <= 40) break;
+        numSize = Math.max(40, Math.floor(numSize * SAFE_HALF / maxHalf));
+      }
+      const la = numUnitAt(L.value, L.unit, numSize);
+      const ra = numUnitAt(R.value, R.unit, numSize);
+      // 对比方向看真实差值：右(今年/现在) vs 左(去年/以前)，负数也能正确判跌
+      const lNum = Number(L.value), rNum = Number(R.value);
+      const vdir = rNum > lNum ? 'up' : rNum < lNum ? 'down' : dirOfCard(card);
+      const lNumCx = 290 - (la.gap + la.unitW) / 2;
+      const rNumCx = 790 - (ra.gap + ra.unitW) / 2;
+      const lUnitX = lNumCx + la.numW / 2 + la.gap + la.unitW / 2;
+      const rUnitX = rNumCx + ra.numW / 2 + ra.gap + ra.unitW / 2;
+      const inner = `<g class="fade">
+        <text x="540" y="390" text-anchor="middle" font-size="60" font-weight="900" fill="${t.ink}">${esc(card.title || '数据对比')}</text>
+        ${industryBadge(card, t)}
+        <g style="animation:fade .6s ease .15s both">${panelL}${panelR}</g>
+        <text x="290" y="610" text-anchor="middle" font-size="48" font-weight="800" fill="${t.accent}" letter-spacing="6">${esc(String(L.label).slice(0, 8))}</text>
+        <text x="790" y="610" text-anchor="middle" font-size="48" font-weight="800" fill="${t.accent2}" letter-spacing="6">${esc(String(R.label).slice(0, 8))}</text>
+        ${odometer(String(L.value), lNumCx, 890, numSize, t.accent)}
+        ${odometer(String(R.value), rNumCx, 890, numSize, t.accent2)}
+        ${L.unit ? `<text x="${lUnitX.toFixed(0)}" y="${890 - Math.round(numSize * 0.15)}" text-anchor="middle" font-size="${la.unitSize}" font-weight="800" class="numfont" fill="${t.ink}">${esc(L.unit)}</text>` : ''}
+        ${R.unit ? `<text x="${rUnitX.toFixed(0)}" y="${890 - Math.round(numSize * 0.15)}" text-anchor="middle" font-size="${ra.unitSize}" font-weight="800" class="numfont" fill="${t.ink}">${esc(R.unit)}</text>` : ''}
+        <text x="290" y="1080" text-anchor="middle" font-size="38" font-weight="700" fill="${t.sub}">${trendDir(L.label + ' ' + card.text) === 'down' ? '▼ 回落' : '▲ 领先'}</text>
+        <text x="790" y="1080" text-anchor="middle" font-size="38" font-weight="700" fill="${t.sub}">${trendDir(R.label + ' ' + card.text) === 'up' ? '▲ 增长' : '▼ 承压'}</text>
+        <g class="vsBadge">
+          <circle cx="540" cy="860" r="96" fill="url(#acc)" opacity="0.96"/>
+          <circle cx="540" cy="860" r="96" fill="none" stroke="#fff" stroke-opacity="0.5" stroke-width="5"/>
+          <text x="540" y="888" text-anchor="middle" font-size="80" font-weight="900" fill="#FFFFFF" font-style="italic" letter-spacing="2">VS</text>
+        </g>
+        ${bottomCaption(card, {})}
+      </g>`;
+      return svgShell(inner, { card });
+    }
+
+    // ---- 仪表盘：半圆刻度盘 + 扫针 + 滚轮大数字 ----
+    function renderGauge(card) {
+      const t = themeForCard(card);
+      const k = card.kpi;
+      if (!k) return renderTitle({ text: card.text || '' });
+      const pct = Math.max(0, Math.min(100, k.num));
+      // 表盘上移 + 指针底座缩小 + 数字字号封顶，三者共同保证大数字顶部始终低于指针底座下缘（不遮挡）
+      const cx = 540, cy = 940, R = 340;
+      const arcPath = `M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`;
+      const arcLen = Math.PI * R;
+      let ticks = '';
+      for (let i = 0; i <= 24; i++) {
+        const ang = -180 + i * (180 / 24);
+        const rad = ang * Math.PI / 180;
+        const inner = i % 6 === 0 ? R - 46 : R - 26;
+        const major = i % 6 === 0;
+        ticks += `<line x1="${(cx + Math.cos(rad) * inner).toFixed(1)}" y1="${(cy + Math.sin(rad) * inner).toFixed(1)}" x2="${(cx + Math.cos(rad) * (R - 8)).toFixed(1)}" y2="${(cy + Math.sin(rad) * (R - 8)).toFixed(1)}" stroke="${major ? t.accent : t.sub}" stroke-opacity="${major ? 0.85 : 0.35}" stroke-width="${major ? 7 : 4}" class="tickIn" style="--rd:${(0.06 + i * 0.028).toFixed(2)}s"/>`;
+      }
+      // ===== 大号加减符号贴在数字前面：符号+数字+单位整组居中（同 KPI 财务写法）=====
+      const gdir = dirOfCard(card);
+      const gShow = gdir === 'up' || gdir === 'down';
+      const gMain = gShow ? String(Math.abs(Number(k.num))) : String(k.num);
+      const gunit = ((k.unit === '％' ? '%' : (k.unit || '')) || ((/%|％/.test(card.text || '')) ? '%' : '')) || measUnitOf(card.text || '', String(k.num));
+      const nl = numUnitLayout(gMain, gunit, gShow ? 500 : 620, 200);
+      const gsize = nl.size;
+      const gSymSize = gsize;
+      const gSymW = gShow ? Math.round(gSymSize * 0.6) : 0;
+      const gSymGap = gShow ? 12 : 0;
+      const gTotalW = gSymW + gSymGap + nl.numW + nl.gap + nl.unitW;
+      const gLeftX = 540 - gTotalW / 2;
+      const gNumCx = gLeftX + gSymW + gSymGap + nl.numW / 2;
+      const gUnitX = gNumCx + nl.numW / 2 + nl.gap + nl.unitW / 2;
+      const gSymFill = gdir === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : (t.light ? '#e0303a' : '#ff4d4f');
+      const nd = -90 + (pct / 100) * 180;
+      const inner = `<g class="fade">
+        <text x="540" y="440" text-anchor="middle" font-size="54" font-weight="800" fill="${t.sub}" letter-spacing="10">${esc(card.label)}</text>
+        ${industryBadge(card, t)}
+        <path d="${arcPath}" fill="none" stroke="${t.sub}" stroke-opacity="0.22" stroke-width="40" stroke-linecap="round"/>
+        <path d="${arcPath}" fill="none" stroke="url(#acc)" stroke-width="40" stroke-linecap="round" pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="${Math.round(1000 - 1000 * pct / 100)}" style="--to:${Math.round(1000 - 1000 * pct / 100)}" class="ringSweep"/>
+        ${ticks}
+        <g transform="translate(${cx} ${cy})"><g class="gaugeNeedle" style="--nd:${nd.toFixed(1)}deg">
+          <line x1="0" y1="0" x2="0" y2="${-(R - 88)}" stroke="${t.hl}" stroke-width="16" stroke-linecap="round"/>
+          <line x1="0" y1="0" x2="0" y2="${-(R - 88)}" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-opacity="0.85"/>
+        </g>
+        <circle cx="0" cy="0" r="28" fill="url(#acc)"/><circle cx="0" cy="0" r="28" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="5"/>
+        <circle cx="0" cy="0" r="10" fill="#fff"/></g>
+        ${odometer(gMain, gNumCx, 1160, gsize, t.ink)}
+        ${gunit ? `<text x="${gUnitX.toFixed(0)}" y="${1160 - Math.round(gsize * 0.15)}" text-anchor="middle" font-size="${nl.unitSize}" font-weight="800" class="numfont" fill="${/%|％/.test(gunit) ? t.accent : t.ink}" ${/%|％/.test(gunit) ? '' : 'fill-opacity="0.92"'}>${esc(gunit)}</text>` : ''}
+        ${gShow ? `<g class="${gdir === 'up' ? 'arrowNudge' : 'arrowNudgeD'}" style="animation-delay:1.3s"><text x="${(gLeftX + gSymW / 2).toFixed(0)}" y="${1160 - Math.round(gsize * 0.04)}" text-anchor="middle" font-size="${gSymSize}" font-weight="900" fill="${gSymFill}" style="animation:deltaPop .7s cubic-bezier(.2,1.5,.4,1) .6s both">${gdir === 'down' ? '−' : '+'}</text></g>` : ''}
+        ${bottomCaption(card, {})}
+      </g>`;
+      return svgShell(inner, { card });
+    }
+
+    // ---- 金句卡：大引号 + 逐词高亮弹入 + 霓虹下划线扫入 ----
+    function renderQuote(card) {
+      const t = themeForCard(card);
+      const text = String(card.text || card.label || '').replace(/\s+/g, '');
+      const size = text.length <= 12 ? 116 : text.length <= 22 ? 96 : text.length <= 36 ? 80 : 66;
+      const maxChars = Math.max(5, Math.floor(960 / size) - 1);
+      let ls = wrapText(text, maxChars);
+      if (ls.length > 6) { ls = ls.slice(0, 6); ls[5] = ls[5].replace(/[，。！？、；：,:]+$/, '') + '…'; }
+      const lh = Math.round(size * 1.3);
+      const startY = 780 - Math.round((ls.length - 1) * lh / 2);
+      let seq = 0, body = '';
+      ls.forEach((ln, li) => {
+        const toks = hormoziTokens(ln, card);
+        const totalW = toks.reduce((s, k) => s + tokenW(k, size), 0);
+        let x = 540 - totalW / 2;
+        toks.forEach(tok => {
+          const w = tokenW(tok, size);
+          const hl = hlToken(tok, card);
+          const td = Math.min(0.15 + seq * 0.09, 2.2);
+          body += `<text x="${(x + w / 2).toFixed(1)}" y="${startY + li * lh}" text-anchor="middle" font-size="${size}" font-weight="900" fill="${hl ? t.hl : t.ink}" class="tw" style="--td:${td.toFixed(2)}s">${esc(tok)}</text>`;
+          x += w;
+          seq++;
+        });
+      });
+      const ind = industryOf(card.text || card.label || '');
+      const inner = `<g class="fade">
+        <text x="150" y="620" font-size="300" font-weight="900" fill="${t.accent}" fill-opacity="0.18" class="fade">“</text>
+        <text x="930" y="1200" text-anchor="end" font-size="300" font-weight="900" fill="${t.accent}" fill-opacity="0.18" class="fade" style="animation-delay:.2s">”</text>
+        <rect x="390" y="${startY + ls.length * lh + 40}" width="300" height="14" rx="7" fill="url(#acc)" class="ulSweep"/>
+        ${body}
+        ${ind ? industryIllustration(ind, t, 540, 1230, 0.5) : ''}
+        ${bottomCaption(card, { text: card.sub || '', delay: 0.6 })}
+      </g>`;
+      return svgShell(inner, { card });
+    }
+
+    // ---- 时间线卡：横向轴线 + 节点逐个点亮，末节点发光 ----
+    function renderTimelineCard(card) {
+      const t = themeForCard(card);
+      const nums = (card.nums || []).slice(0, 5);
+      const labels = (card.labels || []).slice(0, 5);
+      const evts = (card.points || []).slice(0, 5);
+      if (nums.length < 2 && evts.length < 2) return renderTitle({ text: card.text || '' });
+      const n = nums.length >= 2 ? nums.length : evts.length;
+      const startX = 170, endX = 910, axisY = 900;
+      const nodeBg = mixHex(t.bg1, t.bg2);
+      const cells = nums.length >= 2
+        ? nums.map((v, i) => ({ x: 0, top: labels[i] || (i + 1) + '', bottom: v + (card.unit || ''), num: true }))
+        : evts.map(p => ({ x: 0, top: p.year || '', bottom: p.label || '', num: false }));
+      // 相邻节点文字不重叠：按最宽文本自适应字号（预留 24px 间隙），字号到下限仍超宽则截断
+      const spacing = (endX - startX) / (n - 1);
+      const avail = Math.max(70, spacing - 24);
+      const fitAll = (arr, base, min) => Math.max(min, Math.min(base, ...arr.map(s => fitSize(s, avail, base, min))));
+      const topSize = fitAll(cells.map(c => c.top), 46, 28);
+      const botSize = fitAll(cells.map(c => c.bottom), 44, 26);
+      const trunc = (s, size) => {
+        if (textW(s, size) <= avail) return s;
+        let out = String(s);
+        while (out.length > 1 && textW(out + '…', size) > avail) out = out.slice(0, -1);
+        return out + '…';
+      };
+      const pts = cells.map((c, i) => Object.assign(c, { x: startX + (endX - startX) * i / (n - 1) }));
+      let nodes = '';
+      pts.forEach((p, i) => {
+        const last = i === n - 1;
+        const rd = (0.25 + i * 0.3).toFixed(2);
+        const topTxt = trunc(p.top, topSize);
+        const botTxt = trunc(p.bottom, botSize);
+        nodes += `<g class="nodeDot" style="--rd:${rd}s">
+          <circle cx="${p.x}" cy="${axisY}" r="26" fill="${nodeBg}" stroke="${last ? t.accent2 : t.accent}" stroke-width="8"/>
+          <circle cx="${p.x}" cy="${axisY}" r="10" fill="${last ? t.accent2 : t.accent}"/>
+          <text x="${p.x}" y="${axisY - 76}" text-anchor="middle" font-size="${topSize}" font-weight="900" fill="${last ? t.accent2 : t.ink}">${esc(topTxt)}</text>
+          <text x="${p.x}" y="${axisY + 110}" text-anchor="middle" font-size="${botSize}" font-weight="800" ${p.num ? 'class="numfont"' : ''} fill="${last ? t.accent : t.sub}">${esc(botTxt)}</text>
+        </g>`;
+      });
+      const inner = `<g class="fade">
+        <text x="540" y="400" text-anchor="middle" font-size="62" font-weight="900" fill="${t.ink}">${esc(card.title || '发展历程')}</text>
+        ${industryBadge(card, t)}
+        <line x1="${startX}" y1="${axisY}" x2="${endX}" y2="${axisY}" stroke="${t.sub}" stroke-opacity="0.25" stroke-width="8" stroke-linecap="round"/>
+        <line x1="${startX}" y1="${axisY}" x2="${endX}" y2="${axisY}" stroke="url(#acc)" stroke-width="8" stroke-linecap="round" pathLength="1000" class="lineDraw" style="--to:0"/>
+        ${nodes}
+        ${bottomCaption(card, { delay: 0.7 })}
+      </g>`;
+      return svgShell(inner, { card });
+    }
+
+    // ---- 标签卡：要点胶囊逐个弹出，序号 + 关键词 + 轮换配色 ----
+    function renderTags(card) {
+      const t = themeForCard(card);
+      let tags = (card.labels && card.labels.length) ? card.labels.slice(0, 5) : extractTags(card.text);
+      if (!tags.length) tags = ['关键要点'];
+      const colors = [t.accent, t.accent2, t.hl, t.danger || t.accent2, t.accent];
+      const nums = [1, 2, 3, 4, 5];
+      const n = tags.length;
+      // 标题自适应字号（≤10 字 66 / ≤12 字 58 / 更长 50），整体加大一档
+      const ttl = String(card.title || n + ' 个要点');
+      const tSize = ttl.length <= 10 ? 66 : ttl.length <= 12 ? 58 : 50;
+      // 少量标签时拉开行距并垂直居中；底部字幕有衬底板，按板位置自动预留间隙避免重叠
+      const availTop = 500;
+      const availBottom = Math.min(captionPlateTop(card) - 26, 1280);
+      const availH = availBottom - availTop;
+      const rowH = Math.min(235, Math.max(130, availH / n));
+      const topY = Math.round(availTop + (availH - n * rowH) / 2);
+      let out = `<text x="540" y="400" text-anchor="middle" font-size="${tSize}" font-weight="900" fill="${t.ink}">${esc(ttl)}</text>`;
+      out += industryBadge(card, t);
+      tags.forEach((tg, i) => {
+        const y = topY + i * rowH;
+        const c = colors[i % colors.length];
+        const rd = (0.15 + i * 0.18).toFixed(2);
+        // 字号整体加大一档（64→40），胶囊高度随行距自适应，彩色高亮底 + 粗描边凸出重点
+        const raw = String(tg);
+        const L = raw.length;
+        const f = L <= 6 ? 64 : L <= 8 ? 58 : L <= 10 ? 52 : L <= 12 ? 46 : 40;
+        const txt = L > 14 ? raw.slice(0, 13) + '…' : raw;
+        const ph = Math.max(116, Math.min(150, Math.round(rowH - 14)));
+        const w = Math.min(1000, Math.max(460, 200 + txt.length * f + 70));
+        const x = 540 - w / 2;
+        const bx = x + Math.round(ph / 2);
+        const cy = y + Math.round(ph / 2);
+        const br = Math.round(ph * 0.31);
+        out += `<g class="tagCaps" style="--rd:${rd}s">
+          <rect x="${x}" y="${y}" width="${w}" height="${ph}" rx="${Math.round(ph / 2)}" fill="${c}" fill-opacity="0.16"/>
+          <rect x="${x}" y="${y}" width="${w}" height="${ph}" rx="${Math.round(ph / 2)}" fill="${t.glassFill}" stroke="${c}" stroke-width="5"/>
+          <circle cx="${bx}" cy="${cy}" r="${br}" fill="${c}"/>
+          <text x="${bx}" y="${cy + Math.round(ph * 0.12)}" text-anchor="middle" font-size="${Math.round(br * 1.13)}" font-weight="900" class="numfont" fill="${t.bg1}">${nums[i]}</text>
+          <text x="${bx + br + 24}" y="${cy + Math.round(f * 0.4)}" font-size="${f}" font-weight="900" fill="${t.ink}">${esc(txt)}</text>
+        </g>`;
+      });
+      out += bottomCaption(card, {});
+      return svgShell(`<g class="fade">${out}</g>`, { card });
+    }
+
+    // ================================
+    //  解析文案 -> 卡片
+    // ================================
+    const TYPE_LABEL = { kpi: 'KPI大数字', bar: '条形图竞赛', line: '发光面积图', title: 'Hormozi字幕', rank: '排行榜', vs: 'VS对比', gauge: '仪表盘', quote: '金句卡', timeline: '时间线', tags: '标签卡' };
+
+    function buildCardFromText(text, type) {
+      const t = String(text || '');
+      const nums = extractNumbers(t);
+      if (type === 'bar' || type === 'line' || type === 'rank' || type === 'timeline') {
+        const counts = {};
+        nums.forEach(n => counts[n.unit] = (counts[n.unit] || 0) + 1);
+        const primaryUnit = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+        const series = nums.filter(n => n.unit === primaryUnit);
+        const s = series.length ? series : nums;
+        let labels = labelsForSeries(t, primaryUnit, s.length || 1);
+        if (type === 'timeline') {
+          const years = (t.match(/20\d{2}/g) || []).slice(0, 5);
+          if (years.length) labels = years;
+        }
+        return { type, title: t.length > 16 ? t.slice(0, 16) + '…' : t, text: t, nums: s.map(n => n.num).slice(0, 5), unit: primaryUnit ||
+            '', labels: labels.slice(0, 5) };
+      }
+      if (type === 'kpi' || type === 'gauge') {
+        const k = pickKpi(nums);
+        let label = '关键数据';
+        const metrics = ['渗透率', '增长率', '市占率', '毛利率', '净利率', '利润率', '增速', '营收', '净利润', '净利', '利润', '估值', '市值'];
+        for (const kw of metrics) { if (t.includes(kw)) { label = kw; break; } }
+        return { type, label: label, text: t, kpi: k || { text: '0', num: 0, unit: '' }, dir: trendDir(t) };
+      }
+      if (type === 'vs') {
+        const pts = extractDataPoints(t);
+        const l = pts[0] || { label: '甲方', num: (nums[0] || {}).num || 0, unit: (nums[0] || {}).unit || '' };
+        const r = pts[1] || { label: '乙方', num: (nums[1] || {}).num || 0, unit: (nums[1] || {}).unit || '' };
+        return { type: 'vs', title: t.length > 16 ? t.slice(0, 16) + '…' : t, text: t,
+          left: { label: l.label || '甲方', value: l.num, unit: l.unit || '' },
+          right: { label: r.label || '乙方', value: r.num, unit: r.unit || '' } };
+      }
+      if (type === 'tags') {
+        return { type: 'tags', title: '关键要点', text: t, labels: extractTags(t, true) };
+      }
+      if (type === 'quote') {
+        // 手动金句卡也统一走提炼压缩，避免整段叙述照搬成"废话"金句
+        return { type: 'quote', text: condenseNarrative(t) };
+      }
+      // 手动字幕卡兜底：同样提炼压缩，短金句原样、长叙述瘦身
+      const cx = condenseNarrative(t);
+      return { type: 'title', label: cx, text: cx };
+    }
+
+    // ================================
+    //  智能拆解：口播脚本 -> 镜头序列
+    // ================================
+    const KPI_METRICS = ['渗透率', '增长率', '市占率', '占有率', '毛利率', '净利率', '利润率', '收益率', '回报率', '转化率', '复购率',
+      '增速', '规模', '营收', '收入', '净利润', '净利', '利润', '成本', '占比', '份额', '需求', '估值', '预期', '价格', '数量',
+      '金额', '市值', '客单价'
+    ];
+
+    // ---- 标题精炼：剥离口头语/时间限定，抽取"主体+指标"短标题（初次生成即贴近成品） ----
+    const TITLE_METRICS = KPI_METRICS.concat(['销量', '销售额', '交付量', '产量', '产能', '出货量', '保有量', '订单', '库存', '出口', '房价', '油价', '股价', '用户', '会员', '门店', '融资']);
+    const TITLE_OPENERS = /^(?:(?:大家|各位|你们|咱们|我们|我)(?:快)?(?:看|看看|听听|注意|想想|猜猜)|告诉你|说实话|说白了|讲真|注意了?|问题来了|有意思的是|没想到)[^，,。]{0,8}[，,]/;
+    const TITLE_CONNS = /^(?:那|那么|但是|可是|不过|而且|所以|于是|接下来|然后|再看|另外)[，,]/;
+    const TITLE_TIMES = /(?:19|20)\d{2}\s*年(?:上半年|下半年|一季度|二季度|三季度|四季度|度)?|今年|去年|前年|上年|明年|后年|上半年|下半年|一季度|二季度|三季度|四季度|目前|现在|当前|近期|最新|过去[一两三四五几]?年|未来[一两三四五几]?年/g;
+    const TITLE_TAILS = /(的|了|把|将|预计|预测|专家|机构|显示|来看|来说|已经|还是|只剩|只有|还有|整个)$/;
+    // 尾部副词剥离（带保护）："洋河只赚了"的主体是"洋河"；但"成都"这类以"都"结尾的主体不误删
+    function stripTailAdv(s) {
+      let cur = String(s || '');
+      while (/(?:只|就|才|都|也|又|竟|仅|净)$/.test(cur)) {
+        const nxt = cur.replace(/(?:只|就|才|都|也|又|竟|仅|净)+$/, '');
+        if (nxt.length < 2) break;
+        cur = nxt;
+      }
+      return cur;
+    }
+
+    function clampTitle(t, max) {
+      t = String(t || '').trim().replace(/^[了的在和与跟把将]+/, '').replace(/[了的]+$/, '');
+      const n = max || 8;
+      return t.length > n ? t.slice(0, n) : t;
+    }
+
+    // 由数据单位推断指标名（辆→销量、台→数量、%→占比…）
+    function metricFromUnit(s) {
+      s = String(s || '');
+      if (/[\d.]+\s*(?:万|亿|千|万亿)?\s*辆/.test(s)) return '销量';
+      if (/[\d.]+\s*(?:万|亿)?\s*台/.test(s)) return '数量';
+      // "22亿人民币"是金额不是人数：人/名/位后跟"民"时不算用户
+      if (/[\d.]+\s*(?:万|亿)?\s*(?:人|名|位)(?!民)/.test(s)) return '用户';
+      if (/%|％/.test(s)) return '占比';
+      if (/[\d.]+\s*(?:万亿|亿|万|千)/.test(s)) return '规模';
+      if (/[\d.]+\s*倍/.test(s)) return '增速';
+      return '';
+    }
+
+    function subjectBefore(x, kw) {
+      const i = x.indexOf(kw);
+      let head = (x.slice(Math.max(0, i - 10), i).split(/[，,、。；：]/).pop() || '');
+      let prev;
+      do { prev = head; head = head.replace(TITLE_TAILS, ''); } while (head !== prev && head.length);
+      return head;
+    }
+
+    // 标题里没信息量的泛指主语（"这家/那家/某/一家/我们"），抓住重点时直接剥掉，别让它们占字数
+    const FILLER_SUBJECTS = /^(?:我|我们|你们|大家|咱们|人家|这家公司|那家公司|这公司|那公司|一家公司|一个公司|整个公司|某公司|公司|企业)/;
+    // 右端截断但始终保留完整指标词：宁可裁主语前部，也不砍指标字（"再贷款占比"不剪成"再贷款占"）
+    function clampKeepTail(t, max, metric) {
+      const s = String(t || '');
+      const m = String(metric || '');
+      if (s.length <= max) return s;
+      const head = s.slice(0, s.length - m.length);
+      const keep = Math.max(0, max - m.length);
+      return head.slice(Math.max(0, head.length - keep)) + m;
+    }
+
+    function refineTitle(s, kind) {
+      let x = String(s || '').replace(/\s/g, '');
+      x = x.replace(TITLE_OPENERS, '').replace(TITLE_OPENERS, '').replace(TITLE_CONNS, '');
+      x = x.replace(TITLE_TIMES, '');
+      if (kind === 'rank') {
+        for (const kw of TITLE_METRICS) { if (x.includes(kw)) return clampTitle(kw + '排行榜', 10); }
+        return clampTitle((metricFromUnit(x) || '核心数据') + '排行榜', 10);
+      }
+      // 主轴：命中指标词(营收/利润/占比…)时，头为主体、尾为完整指标词，绝不在指标词中间截断
+      for (const kw of TITLE_METRICS) {
+        if (!x.includes(kw)) continue;
+        const head = subjectBefore(x, kw).replace(FILLER_SUBJECTS, '');
+        return clampKeepTail(head.length >= 2 ? head + kw : kw, 12, head.length >= 2 ? kw : '');
+      }
+      const mv = x.match(/([\u4e00-\u9fa5A-Za-z0-9]{2,12}?)(卖了|卖到|达到|做到了?|冲到|突破|涨到|涨至|跌到|跌至|降到|降至|升至|只剩|只有|高达|约为|亏了|赚了|翻了|扭亏|盈利)/);
+      if (mv) {
+        let subj = (mv[1].split(/[，,、。；：]/).pop() || '').replace(/(?:从|由)[\d.].*$/, '').replace(/[\d.].*$/, '');
+        let prev;
+        do { prev = subj; subj = subj.replace(TITLE_TAILS, ''); } while (subj !== prev && subj.length);
+        subj = stripTailAdv(subj);
+        // 主体尾部残留的时间词一并剥掉："这家公司一年赚了30亿"→"这家公司"
+        for (;;) {
+          const nx = subj.replace(/(?:去年|今年|全年|上半年|下半年|Q[1-4]|[一二两三四五六七八九十\d半]+(?:年|个?月|天|日|季度|周))$/, '');
+          if (nx === subj || nx.length < 2) break;
+          subj = nx;
+        }
+        subj = subj.replace(FILLER_SUBJECTS, '');
+        // 盈亏动词优先映射利润类指标："洋河只赚了22亿"→"洋河利润"；无实义主语"这家公司"剥成纯指标"利润"
+        const vm = { '赚了': '利润', '盈利': '利润', '扭亏': '利润', '亏了': '亏损' }[mv[2]];
+        const metric = vm || metricFromUnit(x) || '';
+        if (subj.length >= 1 && metric) return clampKeepTail(subj + metric, 12, metric);
+        return clampTitle(metric || metricLabelOf(x));
+      }
+      return clampTitle(x.replace(/[，,。、；：！？]/g, ''));
+    }
+
+    // 口播语速估时：约 4.5 字/秒，clamp 到 [min, 12]
+    function durForText(s, min) {
+      const len = String(s || '').replace(/\s/g, '').length;
+      return Math.min(12, Math.max(min || 2.5, Math.round(len / 4.5 * 2) / 2));
+    }
+
+    function metricLabelOf(s) {
+      for (const kw of KPI_METRICS) { if (s.includes(kw)) return kw; }
+      return '关键数据';
+    }
+
+    // 口播叙述开头的垃圾项：不是要点，过滤掉避免"我是陆新"这类口播被当标签
+    const TAG_JUNK = /^(?:我是|我叫|大家好|欢迎|各位|我们|你们|他们|她们|它们|其实|然后|但是|所以|因为|如果|这个|那个|今天|以前|现在|目前|第一反应)/;
+
+    // 从文案中提取要点标签：枚举式 > 顿号/逗号列举（每项最多 12 字含数字，不剪字）
+    // allowFallback=true（手工建卡）时保留关键词兜底；自动解析路径不用兜底，减少劣质标签卡
+    function extractTags(text, allowFallback) {
+      const s = String(text || '');
+      const out = [];
+      const re = /(?:第一|首先|其次|再者|再次|然后|最后|此外|另外|一是|二是|三是|四是|其一|其二|其三)[，,、：:]\s*([^，。；！？,;!?]{2,14})/g;
+      let m;
+      while ((m = re.exec(s)) !== null && out.length < 5) {
+        const v = m[1].trim();
+        if (!TAG_JUNK.test(v)) out.push(v);
+      }
+      if (out.length >= 2) return out;
+      out.length = 0;
+      const dl = s.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,12}(?:[、,，][\u4e00-\u9fa5A-Za-z0-9]{2,12}){1,}/);
+      if (dl) {
+        const parts = dl[0].split(/[、,，]/).map(x => x.trim()).filter(Boolean);
+        // 真实枚举不会混入口播叙述项：一旦出现垃圾项，整句按叙述处理（并入下一张数据卡）
+        if (parts.length >= 2 && parts.every(p => !TAG_JUNK.test(p)) && (parts.length >= 3 || Math.max(...parts.map(p => p.length)) <= 8)) {
+          return parts.slice(0, 5);
+        }
+      }
+      if (!allowFallback) return out;
+      const kws = ['增长', '下滑', '风险', '机会', '突破', '新高', '政策', '利率', '资金', '通胀', '复苏', '周期', '估值', '盈利', '需求', '供给', '竞争', '技术', '人口', '消费', '出口', '投资', '就业'];
+      kws.forEach(k => { if (s.includes(k) && out.length < 5) out.push(k); });
+      return out;
+    }
+
+    // 创作口播（自我介绍/告别/下期预告）：即使夹带杂散数字也不成数据卡，返回哨兵让 parseShots 静默丢弃
+    function creatorSignoff(s) {
+      const t = String(s || '').trim();
+      if (/(下期再见|下次再见|下期见|下期预告|下期看|下期讲|下期聊|下期开讲|下期复盘|咱们下期|我们下期见|我们下期|感谢收看|谢谢观看|记得点赞|记得关注|点个关注|点个赞|欢迎收看|欢迎来到|敬请期待|点赞关注|评论区聊聊|评论区见|评论区留言|欢迎评论|欢迎留言|记得评论|多多评论|点赞转发)/.test(t)) return true;
+      // 反问观众收尾（"你觉得…是…，还是…？"）属互动引流，不做数据卡
+      if (/^(你觉得|你们觉得|大家觉得|各位觉得)[^。]{2,20}(?:快)?(?:触底|见底|到底|结束|到顶|还能|还值|还有)[^。]{0,14}还是/.test(t)) return true;
+      if (/^(我是陆新|我是|大家好|各位好|哈喽|兄弟们?|家人们)/.test(t)) {
+        const rest = t.replace(/^(我是陆新|我是|大家好|各位好|哈喽|兄弟们?|家人们)[，,、：:\s]*/, '');
+        // 自我介绍后接"下期看X"的下期预告：哪怕后面带数据（"下期看古井——那4个亿"）也整体丢弃，不生成无意义卡片
+        if (/^(?:下期|我们下期|咱们下期|本期讲完|最后)/.test(rest)) return true;
+        if (rest.replace(/[，。！？!?、\s\d%％]/g, '').length <= 4) return true;
+      }
+      return false;
+    }
+
+    // 单句 -> 镜头卡片（自动匹配类型）
+    function shotForSentence(s) {
+      if (creatorSignoff(s)) return '::DROP::';
+      const years = (s.match(/(?:19|20)\d{2}/g) || []);
+      // 年份不作为数据点（"2024年销量1820万" → 只取 1820万）
+      const sNoYear = s.replace(/(?:19|20)\d{2}\s*年/g, '');
+      const nums = extractNumbers(sNoYear);
+      const counts = {};
+      nums.forEach(n => counts[n.unit] = (counts[n.unit] || 0) + 1);
+      const primaryUnit = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+      const series = primaryUnit === undefined ? [] : nums.filter(n => n.unit === primaryUnit);
+      const dur = durForText(s, 2.5);
+      const title = refineTitle(s);
+
+      // 1) 金句：总结性强标记 + 短句 + 无数据（数据句优先走数据卡，减少金句泛滥）
+      const bareLen = s.replace(/\s/g, '').length;
+      if (/总之|综上|记住|结论|一句话|说白了|核心就是|本质是/.test(s) && bareLen <= 40 && !/\d/.test(s)) {
+        return { type: 'quote', text: s, duration: Math.max(dur, 3) };
+      }
+      // 2) VS 对比：对比词 / 今昔时间对 / "从X涨到Y"变化句，且恰有 2 个同单位数据
+      const tp = /(去年|上年|同期|上月|上季度|以前|过去).{0,14}?(今年|现在|目前|如今|当下)/.exec(s);
+      const chg = /(?:从|由)\s*[\d.]+\s*\S{0,4}[^，。]{0,4}(?:涨|跌|升|降|增|减|冲|突破|回落)/.test(s);
+      if (series.length === 2 && (/vs|VS|对比|相比|PK|pk/.test(s) || tp || chg)) {
+        const pts = extractDataPoints(sNoYear).filter(p => p.unit === primaryUnit);
+        const cleanL = v => String(v || '').replace(/(从|到了|涨到|跌到|增至|降至|达到)$/, '');
+        let lLabel, rLabel;
+        if (tp) { lLabel = tp[1]; rLabel = tp[2]; }
+        else if (chg) { lLabel = '此前'; rLabel = '现在'; }
+        else {
+          lLabel = pts[0] ? cleanL(pts[0].label).slice(0, 8) : '甲方';
+          rLabel = pts[1] ? cleanL(pts[1].label).slice(0, 8) : '乙方';
+          if (lLabel.length < 2) lLabel = '甲方';
+          if (rLabel.length < 2) rLabel = '乙方';
+        }
+        return { type: 'vs', title, text: s,
+          left: { label: lLabel, value: series[0].num, unit: primaryUnit || '' },
+          right: { label: rLabel, value: series[1].num, unit: primaryUnit || '' },
+          duration: Math.max(dur, 4) };
+      }
+      // 3) 时间线：≥3 个年份的事件推进（无数据）；或 ≥2 年份 + 数据序列
+      if (years.length >= 3 && series.length < 2) {
+        const pts = [];
+        const re = /((?:19|20)\d{2})\s*年\s*([^，。；、]{1,8})/g;
+        let m;
+        while ((m = re.exec(s)) !== null && pts.length < 5) {
+          const lbl = m[2].replace(/[，。；、\s]+$/, '');
+          if (lbl) pts.push({ year: m[1], label: lbl });
+        }
+        if (pts.length >= 2) return { type: 'timeline', text: s, points: pts, duration: Math.max(dur, 4.5) };
+      }
+      if (years.length >= 2 && series.length >= 2) {
+        return { type: 'timeline', title, text: s, nums: series.slice(0, 5).map(n => n.num),
+          unit: primaryUnit || '', labels: years.slice(0, 5), duration: Math.max(dur, 4.5) };
+      }
+      // 4) 标签要点：无数据 + 真实枚举/列举结构（extractTags 已过滤垃圾项与关键词兜底）
+      if (!nums.length) {
+        const tags = extractTags(s);
+        const hint = /(三个|四个|五个|六大|三大|四大|五大|三点|四点|几点)[^，。]{0,6}(信号|原因|因素|理由|要点|特征|变化|趋势|问题|建议|逻辑)/.exec(s);
+        if (tags.length >= 2) {
+          const lead = /^([^：:，。]{2,10})[：:]/.exec(s);
+          // 标题取冒号引导语或首个分句，聚焦主体而非整句口播
+          const tTitle = lead ? clampTitle(lead[1].replace(/(是|有|如下|包括)$/, ''), 12)
+            : clampTitle((s.split(/[，,]/)[0] || s).replace(/[。！？；：、]/g, ''), 12);
+          return { type: 'tags', title: hint ? hint[0] : tTitle, text: s, labels: tags, duration: Math.max(dur, 3.5) };
+        }
+      }
+      // 5) 图表：≥3 个同单位数据（强趋势词+时间轴 → 折线；横向多项 → 排行榜）
+      if (series.length >= 3) {
+        const strongTrend = /趋势|走势|逐月|逐年|月度|季度|同比|环比/.test(s);
+        if (strongTrend && (years.length >= 2 || /逐月|逐年|月度|季度|同比|环比/.test(s))) {
+          return { type: 'line', title, text: s, nums: series.slice(0, 5).map(n => n.num), unit: primaryUnit,
+            labels: labelsForSeries(sNoYear, primaryUnit, Math.min(series.length, 5)), duration: Math.max(dur, 4.5) };
+        }
+        return { type: 'rank', title: refineTitle(s, 'rank'), text: s, nums: series.slice(0, 5).map(n => n.num), unit: primaryUnit,
+          labels: labelsForSeries(sNoYear, primaryUnit, Math.min(series.length, 5)), duration: Math.max(dur, 4.5) };
+      }
+      // 6) 双数据 -> 条形
+      if (series.length === 2) {
+        let labels = labelsForSeries(sNoYear, primaryUnit, 2);
+        if (labels.some(l => l.replace(/第\d+项/, '').length < 2 || /[看比的了在到从与而]/.test(l))) {
+          // 标签提取失败：尝试时间对词，否则用"本期/上期"
+          const tp2 = /(去年|上年|同期|上月|以前|过去).{0,14}?(今年|现在|目前|如今|当下)/.exec(s);
+          if (tp2) labels = [tp2[2], tp2[1]];
+          else if (years.length >= 2) labels = years.slice(0, 2);
+          else labels = ['同比', '环比'];
+        }
+        return { type: 'bar', title, text: s, nums: series.map(n => n.num), unit: primaryUnit || '',
+          labels, duration: Math.max(dur, 4) };
+      }
+      // 6.5) 变化份额句：句子里只有"砍掉/少了/涨了 X成、X分之X、一半"这类变化量、又没有现成百分比时，
+      // 升格为变化仪表盘（跌红涨绿）——不能拿铺垫旧数（"前年还赚着100亿"）冒充当前主数据，否则大数字和字幕互相打架
+      if (series.length <= 1 && !nums.some(n => /%|％/.test(n.unit))) {
+        const cs = changeShareOf(s);
+        if (cs) {
+          const rT2 = refineTitle(s);
+          const label2 = (rT2.length >= 2 && !/[\d%％]/.test(rT2)) ? rT2 : metricLabelOf(s);
+          if (label2.replace(/(下滑|上涨|下降|增长)/g, '').length >= 2) {
+            return { type: 'gauge', label: label2, text: s, kpi: { text: cs.num + '%', num: cs.num, unit: '%' }, dir: cs.dir, duration: Math.max(dur, 4) };
+          }
+        }
+      }
+      // 7) 单一百分比 -> 仪表盘；其他单数据 -> KPI（同比/环比修饰的百分比让位给主数据）
+      if (nums.length >= 1) {
+        const coreNums = nums.filter(n => {
+          const i = sNoYear.indexOf(n.text);
+          const pre = i > 0 ? sNoYear.slice(Math.max(0, i - 5), i) : '';
+          return !/(同比|环比|增长|下降|下滑|上涨|涨幅|跌幅|增速|增幅)$/.test(pre);
+        });
+        const k = pickKpi(coreNums.length ? coreNums : nums);
+        const rT = refineTitle(s);
+        const label = (rT.length >= 2 && !/[\d%％]/.test(rT)) ? rT : metricLabelOf(s);
+        // 负百分比不进仪表盘（指针会被钳到 0），改走 KPI + 大号减号徽章
+        if (/%|％/.test(k.unit || '') && Number(k.num) > 0) {
+          return { type: 'gauge', label, text: s, kpi: k, dir: trendDir(s), duration: Math.max(dur, 4) };
+        }
+        return { type: 'kpi', label, text: s, kpi: k, dir: Number(k.num) < 0 ? 'down' : trendDir(s), duration: Math.max(dur, 4) };
+      }
+      // 8) 纯叙述 -> 不单独成卡（parseShots 将其并入下一张数据卡当引子）
+      return null;
+    }
+
+    // 枚举式短句开头识别（用于聚合 tags 卡）
+    const ENUM_START = /^(第[一二三四五六]|首先|其一|一是|[①②③④⑤])/;
+    const ENUM_NEXT = /^(其次|再次|然后|此外|另外|而且|同时|其二|二是|其三|三是|其四|四是|最后|③|④|⑤|第[二三四五六])/;
+    // 冒号引导的句内枚举开头："价格战是主因：第一，A；"
+    const ENUM_LEAD = /^([^：:]{1,12})[：:]\s*(?:第[一二三四五六]|首先|其一|一是)[，,、：:]/;
+
+    // 本地金句压缩器（纯规则、只删不改）：把兜底语义叙事长句压缩成保留张力的短金句。
+    // 以"减删不改写"为安全底线：只在原文词表内抽子句、删水词，绝不捏造或改词。
+    function condenseNarrative(text) {
+      const _TURN = /现在|如今|目前|当下|终于|但|但是|然而|可是|可如今|转折|拐点|变了|真的来了|不一样|起变化|来真的|结果|直到|到头来|好(在|的是)/;
+      const _TENS = /烧|亏|跌|涨|冲|猛|疯|拼命|狂|砸|扛|撑|连年|十?[几1-9]年|数年|多年|一直|万|亿|百亿|没人[看买]|卖不动|卡脖子|压|滞销/;
+      const _DROP_LEAD = /^(?:嗯|喏|那好|好的|我们来看|大家看|来看|这么看|说到底|说白了)(?:这个|那个)?[，,:：、]?/;
+      const _LINK = /^(?:而且|并且|同时|还有|另外|与此同时|事实上|并且)/;
+      const trunc = (s, n) => {
+        if (s.length <= n) return s;
+        const head = s.slice(0, n);
+        const lastComma = head.lastIndexOf('，');
+        if (lastComma >= n - 8) return head.slice(0, lastComma) + '…';
+        return head.replace(/[，。；、]+$/, '') + '…';
+      };
+      let s = String(text || '').trim();
+      if (!s) return s;
+      s = s.replace(_DROP_LEAD, '').replace(/^[，。；！？、]+/, '').trim();
+      if (!s) return text;
+      const clauses = s.split(/[，,。；;！!？?]/).map(c => c.trim()).filter(c => c.length >= 2);
+      if (clauses.length <= 2) return s;
+      // 定位转折子句（从第 1 个开始找，避开句首"以前…现在…"误判）
+      let idx = clauses.findIndex((c, i) => i > 0 && _TURN.test(c));
+      if (idx < 0) {
+        // 无转折：保留主语子句 + 尾子句（线性叙事压成"头→尾"）
+        return trunc([clauses[0], clauses[clauses.length - 1]].join('，'), 36);
+      }
+      // 有转折：保头 + 转折前最有张力的一子句 + 转折及结论。
+      // 张力子句必须来自"转折之前"且不能是转折子句本身（idx 边界），否则会重复。
+      const prefix = [clauses[0]];
+      const pre = clauses.slice(1, idx).find(c => _TENS.test(c)) || (idx >= 2 ? clauses[idx - 1] : null);
+      if (pre && ![...prefix].includes(pre)) prefix.push(pre);
+      let post = clauses.slice(idx).filter(c => !_LINK.test(c));
+      if (post.length > 2) post = post.slice(0, 2);
+      return trunc(prefix.join('，') + '，' + post.join('，'), 42);
+    }
+
+    // 判断压缩后的叙事句是否"够格"做成金句卡：须含转折/张力/有力结论，避免空泛弱观点句泛滥成金句
+    function narrativeTension(t) {
+      return /现在|如今|目前|终于|但|但是|然而|可是|可是如今|可如今|拐点|真的来了|变了|到头来|好(在|的是)|烧|亏|跌|冲|猛|疯|砸|扛|撑|连年|多年|没人|卖不动|卡脖子|涨停|跌停|跌破|腰斩|翻倍|突破|翻|起飞|排到|就要|马上|赚|涨|订单|到手|拿下/.test(String(t));
+    }
+
+    function parseShots(text) {
+      const sentences = (String(text || '').match(/[^。！？!?；;\n]+[。！？!?；;\n]?/g) || [])
+        .map(s => s.trim()).filter(s => s.replace(/[。！？!?；;，,、\s]/g, '').length >= 2);
+      let shots = [];
+      let enumBuf = [];
+      let enumLead = '';
+      let pendLead = []; // 待并入下一张数据卡的纯叙述句（引子）
+      const attachLead = (shot) => {
+        if (pendLead.length && shot) {
+          shot.text = pendLead.join('，') + '，' + (shot.text || '');
+          shot.duration = Math.max(shot.duration || 0, durForText(shot.text, 3));
+          pendLead = [];
+        }
+        return shot;
+      };
+      // 引子合并后标题补回：单句里"这个数/同比降了x"这类指代或变化句式丢掉了真实指标，
+      // 用合并后的完整文本（含引子里出现的名词"信号藏在合同负债里"）重提取指标词，避免仪表盘标题变成"这个数同比降了四"
+      const refineGaugeTopic = (shot) => {
+        if (!shot) return shot;
+        if (shot.type !== 'gauge' && shot.type !== 'kpi') return shot;
+        const low = String(shot.label || '');
+        if (low && low.length >= 2 && !/(降了|砍|缩|跌|同比|环比|四分之|这个数|那个数|还在|又|反而)/.test(low)) return shot;
+        const full = String(shot.text || '');
+        for (const w of ['合同负债', '资产负债率', '应收账款', '预收款', '市占率', '渗透率', '净利率', '毛利率', '净利润', '净利',
+          '库存', '存货', '订单', '渠道', '负债', '营收', '利润', '销售额', '占比', '份额', '规模', '销量', '产量', '客单价', '市值', '股价']) {
+          if (full.indexOf(w) >= 0) { shot.label = w; return shot; }
+        }
+        const m2 = metricLabelOf(full);
+        if (m2 && m2 !== '关键数据') shot.label = m2;
+        return shot;
+      };
+      const flushEnum = () => {
+        if (!enumBuf.length) return;
+        const joined = enumBuf.join(' ');
+        shots.push(attachLead({ type: 'tags',
+          title: enumLead || enumBuf.length + ' 个要点',
+          text: joined,
+          labels: enumBuf.map(x => {
+            let v = x;
+            for (let i = 0; i < 2; i++) v = v.replace(/^[^，,：:]{0,8}[，,：:]\s*/, '');
+            return v.replace(/[。！？；;，,]\s*$/, '');
+          }).filter(x => x.length >= 2).slice(0, 5),
+          duration: Math.max(durForText(joined, 3), 3.5) }));
+        enumBuf = [];
+        enumLead = '';
+      };
+      sentences.forEach(s => {
+        const bare = s.replace(/[。！？!?；;\s]/g, '');
+        const isEnum = (enumBuf.length ? ENUM_NEXT : ENUM_START).test(s);
+        if (isEnum && bare.length <= 45) { enumBuf.push(s); return; }
+        // 冒号引导的枚举开头句，开启聚合（后续"第二…第三…"自然并入）
+        if (!enumBuf.length && ENUM_LEAD.test(s) && bare.length <= 45) {
+          const lead = ENUM_LEAD.exec(s)[1].replace(/^(导致|因为|背后是|来看)$/, '');
+          enumLead = lead.length >= 2 ? lead : '';
+          enumBuf.push(s); return;
+        }
+        flushEnum();
+        const shot = shotForSentence(s);
+        if (shot === '::DROP::') return; // 创作口播：不成卡、也不并入叙事引子
+        if (!shot) { pendLead.push(s.replace(/[。！？!?；;\s]+$/, '')); return; }
+        shots.push(refineGaugeTopic(attachLead(shot)));
+      });
+      flushEnum();
+      // 结尾残余叙述句：经本地金句压缩器提炼为短金句；有张力的升级为金句卡，空泛的保留字幕卡
+      if (pendLead.length) {
+        const joined = pendLead.join('，');
+        const condensed = condenseNarrative(joined);
+        const type = narrativeTension(condensed) ? 'quote' : 'title';
+        shots.push({ type, label: condensed, text: condensed, duration: durForText(condensed, 3) });
+      }
+      // 每卡自适应配色（相邻不重色）
+      // 兜底过滤：即便某句口播漏过 creatorSignoff，这里也会把标成"我是/陆新/下期/欢迎/评论区"之类口播词的 KPI/仪表盘卡剔除，
+      // 保证任何"裸数字+断标题"的收尾口播卡都不可能存活到渲染
+      const CREATOR_LABEL = /(我是|陆新|下期|本期|大家好|各位好|欢迎|感谢收看|评论区|记得点|点赞关注|敬请期待|我们下期|咱们下期|哈喽|再见)/;
+      shots = shots.filter(c => {
+        if ((c.type === 'kpi' || c.type === 'gauge') && CREATOR_LABEL.test(String(c.label || ''))) return false;
+        return true;
+      });
+      shots.forEach((c, i) => { c.theme = autoThemeFor(c, i > 0 ? shots[i - 1].theme : null); });
+      return shots;
+    }
+
+    // ================================
+    //  渲染与切换
+    // ================================
+    function renderCard(card) {
+      switch (card.type) {
+        case 'kpi':
+          return renderKPI(card);
+        case 'gauge':
+          return renderGauge(card);
+        case 'bar':
+          return renderBar(card);
+        case 'line':
+          return renderLine(card);
+        case 'rank':
+          return renderRank(card);
+        case 'vs':
+          return renderVS(card);
+        case 'quote':
+          return renderQuote(card);
+        case 'timeline':
+          return renderTimelineCard(card);
+        case 'tags':
+          return renderTags(card);
+        default:
+          return renderTitle(card);
+      }
+    }
+
+    function getLayerEl(idx) {
+      return document.getElementById('layer' + idx);
+    }
+
+    function showCard(i) {
+      if (videoRecording) return; // 录制视频期间锁定卡片切换（连播/轮播已在录制前暂停）
+      if (!cards.length) return;
+      activeIndex = (i + cards.length) % cards.length;
+      const card = cards[activeIndex];
+      const svg = renderCard(card);
+      if (!playing) startAutoTimer(); // 空闲轮播按新卡片时长重启（连播中不打扰）
+
+      const nextLayer = activeLayer === 0 ? 1 : 0;
+      const nextEl = getLayerEl(nextLayer);
+      const curEl = getLayerEl(activeLayer);
+
+      // 绘制到下一层
+      nextEl.innerHTML = svg;
+      // 让下一层显示，当前层隐藏
+      nextEl.classList.remove('layer-off');
+      curEl.classList.add('layer-off');
+
+      activeLayer = nextLayer;
+
+      // 更新列表高亮、编辑面板、时间线高亮与播放头（对齐该卡片起点）
+      updateListActive();
+      populateEditFields(card);
+      updatePlayhead(cardStart(activeIndex)); saveState();
+    }
+
+    // 仅刷新预览图层，不重建编辑面板，保留输入焦点
+    function refreshPreview() {
+      if (!cards.length) return;
+      const card = cards[activeIndex];
+      const svg = renderCard(card);
+      const nextLayer = activeLayer === 0 ? 1 : 0;
+      const nextEl = getLayerEl(nextLayer);
+      const curEl = getLayerEl(activeLayer);
+      nextEl.innerHTML = svg;
+      nextEl.classList.remove('layer-off');
+      curEl.classList.add('layer-off');
+      activeLayer = nextLayer;
+      saveState();
+    }
+
+    function replayAnimation(internal) {
+      // 重播当前卡片：清空 innerHTML 后隔一帧重渲染，确保进度环/折线等 CSS 动画从 0 重新开始
+      if (videoRecording && !internal) return; // 录制视频期间不允许手动重播
+      if (!cards.length) return;
+      const card = cards[activeIndex];
+      const curEl = getLayerEl(activeLayer);
+      curEl.innerHTML = '';
+      requestAnimationFrame(() => {
+        curEl.innerHTML = renderCard(card);
+        curEl.classList.remove('layer-off');
+        const other = activeLayer === 0 ? 1 : 0;
+        getLayerEl(other).classList.add('layer-off');
+      });
+    }
+
+    // ================================
+    //  列表
+    // ================================
+    function renderList() {
+      const list = document.getElementById('cardList');
+      list.innerHTML = '';
+      cards.forEach((c, i) => {
+        const it = document.createElement('div');
+        it.className = 'card-item' + (i === activeIndex ? ' active' : '');
+        const th = themeForCard(c) || THEMES.neonNight;
+        it.innerHTML = `
+          <div class="idx">${i+1}</div>
+          <div class="theme-dot" title="${th.name}" style="background:${mixHex(th.bg1, th.bg2)}"></div>
+          <div class="info">
+            <div class="title">${esc(c.text||c.title||'')}</div>
+            <div class="desc">${TYPE_LABEL[c.type]} · ${c.nums ? c.nums.length + ' 个数据点' : (c.kpi ? c.kpi.text : (c.left ? '左右对比' : (c.labels && c.labels.length ? c.labels.length + ' 个要点' : '文字')))}</div>
+          </div>
+          <select data-i="${i}">
+            ${Object.keys(TYPE_LABEL).map(t=>`<option value="${t}" ${t===c.type?'selected':''}>${TYPE_LABEL[t]}</option>`).join('')}
+          </select>
+        `;
+        it.addEventListener('click', e => {
+          if (e.target.tagName !== 'SELECT') { activeIndex = i;
+            showCard(i); }
+        });
+        it.querySelector('select').addEventListener('change', e => {
+          const prev = cards[i];
+          const nc = buildCardFromText(prev.text, e.target.value);
+          nc.duration = prev.duration; // 切换类型保留自定义时长
+          nc.theme = prev.theme; // 切换类型保留本卡配色
+          cards[i] = nc;
+          saveState();
+          if (i === activeIndex) showCard(i);
+          else renderList();
+        });
+        list.appendChild(it);
+      });
+    }
+
+    function updateListActive() {
+      document.querySelectorAll('.card-item').forEach((el, i) => {
+        el.classList.toggle('active', i === activeIndex);
+      });
+    }
+
+    // 手动新建一张空白字幕卡片并将其切换为当前卡片
+    function addNewCard() {
+      cards.push({ type: 'title', label: '新卡片', text: '双击编辑文字', theme: currentTheme });
+      renderList();
+      showCard(cards.length - 1);
+    }
+
+    // 深拷贝当前卡片并插入其后，切换到新卡片
+    function copyCurrentCard() {
+      if (!cards.length) return;
+      const clone = JSON.parse(JSON.stringify(cards[activeIndex]));
+      cards.splice(activeIndex + 1, 0, clone);
+      renderList();
+      showCard(activeIndex + 1);
+    }
+
+    // ================================
+    //  时间线预览
+    // ================================
+    function cardDuration(c) {
+      if (c && c.duration) return c.duration;
+      if (!c) return 3;
+      if (c.type === 'line' || c.type === 'timeline') return 5;
+      if (c.type === 'bar' || c.type === 'kpi' || c.type === 'rank' || c.type === 'vs' || c.type === 'gauge') return 4;
+      if (c.type === 'quote' || c.type === 'tags') return 3.5;
+      return 3;
+    }
+
+    // ================================
+    //  时间轴几何换算（秒 ↔ 像素 ↔ 卡片）
+    // ================================
+    let loopPlay = true; // 连播循环
+    let playHeadTime = 0; // 播放头当前秒数
+    let autoTimer = 0; // 空闲自动轮播定时器（与连播引擎互斥）
+    let autoPlay = false; // 空闲自动轮播开关：默认关闭，用户勾选后才生效
+
+    function stopAutoTimer() {
+      if (autoTimer) { clearInterval(autoTimer); autoTimer = 0; }
+    }
+    function startAutoTimer() {
+      stopAutoTimer();
+      if (!autoPlay || !cards.length) return; // 未勾选自动轮播则不启动
+      const d = Math.max(2, cardDuration(cards[activeIndex])) * 1000;
+      autoTimer = setInterval(() => {
+        if (playing || !cards.length) { stopAutoTimer(); return; } // 连播接管时让位
+        showCard(activeIndex + 1);
+      }, d);
+    }
+
+    function totalDuration() { return cards.reduce((s, c) => s + cardDuration(c), 0); }
+    function cardStart(i) { let s = 0; for (let k = 0; k < i; k++) s += cardDuration(cards[k]); return s; }
+    function cardAt(t) {
+      let acc = 0;
+      for (let i = 0; i < cards.length; i++) {
+        const d = cardDuration(cards[i]);
+        if (t < acc + d) return { index: i, start: acc };
+        acc += d;
+      }
+      const li = Math.max(0, cards.length - 1);
+      return { index: li, start: acc - cardDuration(cards[li]) };
+    }
+    function fmtTime(t) {
+      const m = Math.floor(t / 60), s = t - m * 60;
+      return String(m).padStart(2, '0') + ':' + (s < 10 ? '0' : '') + s.toFixed(1);
+    }
+
+    function updatePlayhead(t) {
+      playHeadTime = Math.max(0, Math.min(t, totalDuration()));
+      const total = totalDuration();
+      const cur = document.getElementById('dockTimeCur');
+      if (cur) cur.textContent = fmtTime(playHeadTime);
+      const tot = document.getElementById('dockTimeTotal');
+      if (tot) tot.textContent = fmtTime(total);
+      const fill = document.getElementById('dockFill');
+      if (fill) fill.style.height = (total > 0 ? (playHeadTime / total) * 100 : 0) + '%';
+    }
+
+    // ================================
+    //  整体连播引擎（按各卡片时长顺序播放，播放头同步）
+    // ================================
+    let playing = false, playOffset = 0, playStart = 0, playRaf = 0;
+
+    function playPlayback() {
+      if (!cards.length) return;
+      stopAutoTimer(); // 连播引擎接管，空闲轮播让位
+      playing = true;
+      playStart = performance.now();
+      playOffset = playHeadTime * 1000;
+      const btn = document.getElementById('pbPlay');
+      if (btn) btn.textContent = '⏸';
+      cancelAnimationFrame(playRaf);
+      playRaf = requestAnimationFrame(playTick);
+    }
+
+    function pausePlayback() {
+      if (!playing) return;
+      playing = false;
+      cancelAnimationFrame(playRaf);
+      const btn = document.getElementById('pbPlay');
+      if (btn) btn.textContent = '▶';
+      saveState();
+    }
+
+    function playTick(now) {
+      if (!playing) return;
+      const total = totalDuration();
+      if (total <= 0) return;
+      let t = (playOffset + (now - playStart)) / 1000;
+      if (t >= total) {
+        if (loopPlay) { playOffset = 0; playStart = now; t = 0; }
+        else {
+          playing = false;
+          const btn = document.getElementById('pbPlay');
+          if (btn) btn.textContent = '▶';
+          seekTo(total);
+          return;
+        }
+      }
+      seekTo(t, true);
+      playRaf = requestAnimationFrame(playTick);
+    }
+
+    // 跳转到指定秒：更新播放头/时间码，必要时轻量切换卡片
+    function seekTo(t, fromPlay) {
+      const total = totalDuration();
+      t = Math.max(0, Math.min(t, total));
+      const hit = cardAt(t);
+      if (hit.index !== activeIndex) switchCard(hit.index, !fromPlay);
+      updatePlayhead(t);
+    }
+
+    // 轻量切换：仅换 SVG 层与高亮（连播时不重建编辑面板，避免打断输入）
+    function switchCard(i, withEdit) {
+      if (!cards.length) return;
+      activeIndex = (i + cards.length) % cards.length;
+      const card = cards[activeIndex];
+      const nextLayer = activeLayer === 0 ? 1 : 0;
+      getLayerEl(nextLayer).innerHTML = renderCard(card);
+      getLayerEl(nextLayer).classList.remove('layer-off');
+      getLayerEl(activeLayer).classList.add('layer-off');
+      activeLayer = nextLayer;
+      updateListActive();
+      if (withEdit) populateEditFields(card);
+    }
+
+    // ================================
+    //  编辑面板
+    // ================================
+    function populateEditFields(card) {
+      const container = document.getElementById('editFields');
+      if (!card) { container.innerHTML = '请选择一张卡片'; return; }
+      let html = '';
+      const chartTypes = ['bar', 'line', 'rank', 'timeline'];
+      if ((card.type === 'kpi' || card.type === 'gauge') && card.kpi) {
+        html += `<div class="edit-row"><label>数字</label><input type="number" id="editKpiNum" value="${card.kpi.num}" step="any"></div>`;
+        html += `<div class="edit-row"><label>单位</label><input type="text" id="editKpiUnit" value="${card.kpi.unit}"></div>`;
+        html += `<div class="edit-row"><label>方向</label><select id="editDir"><option value="up" ${card.dir==='up'?'selected':''}>上涨</option><option value="down" ${card.dir==='down'?'selected':''}>下跌</option><option value="flat" ${card.dir==='flat'?'selected':''}>持平</option></select></div>`;
+        html += `<div class="edit-row"><label>标签</label><input type="text" id="editLabel" value="${card.label}"></div>`;
+      } else if (chartTypes.includes(card.type)) {
+        const nums = card.nums || [],
+          labels = card.labels || [];
+        html += `<div class="edit-row"><label>单位</label><input type="text" id="editUnit" value="${card.unit}"></div>`;
+        html += `<div class="edit-row" style="justify-content:space-between;"><label>数据点</label>
+          <span style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-sm" id="addPointBtn" title="添加数据点">＋</button>
+            <button type="button" class="btn btn-sm" id="delPointBtn" title="删除数据点">－</button>
+          </span></div>`;
+        html += `<div class="edit-row"><div class="val-group">`;
+        nums.forEach((v, i) => {
+          html +=
+            `<input type="number" value="${v}" data-idx="${i}" class="editNum" step="any" style="flex:1;min-width:50px;" placeholder="数值${i+1}">`;
+        });
+        html += `</div></div>`;
+        html += `<div class="edit-row"><div class="val-group">`;
+        labels.forEach((l, i) => {
+          html += `<input type="text" value="${l}" data-idx="${i}" class="editLabelText" style="flex:1;min-width:50px;" placeholder="标签${i+1}">`;
+        });
+        html += `</div></div>`;
+      } else if (card.type === 'vs') {
+        const L = card.left || { label: '', value: 0, unit: '' };
+        const R = card.right || { label: '', value: 0, unit: '' };
+        html += `<div class="edit-row"><label>左侧</label><input type="text" id="vsLeftLabel" value="${esc(L.label)}" placeholder="名称" style="flex:1"><input type="number" id="vsLeftVal" value="${L.value}" step="any" style="width:88px" title="数值"><input type="text" id="vsLeftUnit" value="${esc(L.unit)}" placeholder="单位" style="width:64px"></div>`;
+        html += `<div class="edit-row"><label>右侧</label><input type="text" id="vsRightLabel" value="${esc(R.label)}" placeholder="名称" style="flex:1"><input type="number" id="vsRightVal" value="${R.value}" step="any" style="width:88px" title="数值"><input type="text" id="vsRightUnit" value="${esc(R.unit)}" placeholder="单位" style="width:64px"></div>`;
+      } else if (card.type === 'tags') {
+        const tags = (card.labels && card.labels.length) ? card.labels : extractTags(card.text);
+        html += `<div class="edit-row" style="align-items:flex-start;"><label>要点</label><textarea id="editTags" rows="4" style="flex:1;resize:vertical;" placeholder="每行一个要点">${esc(tags.join('\n'))}</textarea></div>`;
+        html += `<div class="edit-row"><label>标题</label><input type="text" id="editTitle" value="${esc(card.title || '')}"></div>`;
+      } else if (card.type === 'quote' || card.type === 'title') {
+        html += `<div class="edit-row" style="align-items:flex-start;"><label>文案</label><textarea id="editCardText" rows="3" style="flex:1;resize:vertical;">${esc(card.text || '')}</textarea></div>`;
+      } else {
+        html = `<div style="color:var(--sub);font-size:12px;">该类型无附加字段，可修改角标与时长</div>`;
+      }
+      // 时长 + Pill 角标 + 本卡配色：所有卡片类型通用
+      html = `<div class="edit-row"><label>时长</label><input type="number" id="editDur" value="${cardDuration(card)}" step="0.5" min="0.5" style="width:74px;"> <span style="color:var(--sub);font-size:12px;">秒（连播时按此时长）</span></div>` + html;
+      const pillVal = card.pill !== undefined ? card.pill : defaultPill(card);
+      html = `<div class="edit-row"><label>角标</label><input type="text" id="editPill" value="${esc(pillVal)}" placeholder="如 🔥 热点，留空隐藏"></div>` + html;
+      html = `<div class="edit-row" style="align-items:center;"><label>配色</label><div class="swatches mini" id="cardSwatches"></div></div>` + html;
+      container.innerHTML = html;
+
+      // 本卡配色：仅修改当前卡片，不影响其他卡片
+      const swBox = document.getElementById('cardSwatches');
+      if (swBox) {
+        const curKey = themeOfCard(card);
+        Object.entries(THEMES).forEach(([key, t]) => {
+          const sw = document.createElement('div');
+          sw.className = 'sw' + (key === curKey ? ' active' : '');
+          sw.title = t.name;
+          sw.innerHTML =
+            `<div class="bg" style="background:${mixHex(t.bg1, t.bg2)}"></div><div class="bar" style="background:${t.accent}"></div>`;
+          sw.addEventListener('click', () => {
+            card.theme = key;
+            swBox.querySelectorAll('.sw').forEach(s => s.classList.remove('active'));
+            sw.classList.add('active');
+            refreshPreview();
+            renderList();
+          });
+          swBox.appendChild(sw);
+        });
+      }
+
+      // 绑定事件
+      document.getElementById('editDur').addEventListener('input', function() {
+        const v = parseFloat(this.value);
+        if (!isNaN(v) && v > 0) {
+          card.duration = v;
+          saveState();
+        }
+      });
+      document.getElementById('editPill').addEventListener('input', function() {
+        card.pill = this.value;
+        refreshPreview();
+      });
+      if ((card.type === 'kpi' || card.type === 'gauge') && card.kpi) {
+        document.getElementById('editKpiNum').addEventListener('input', function() {
+          card.kpi.num = parseFloat(this.value) || 0;
+          refreshPreview();
+        });
+        document.getElementById('editKpiUnit').addEventListener('input', function() {
+          card.kpi.unit = this.value;
+          refreshPreview();
+        });
+        document.getElementById('editDir').addEventListener('change', function() {
+          card.dir = this.value;
+          refreshPreview();
+        });
+        document.getElementById('editLabel').addEventListener('input', function() {
+          card.label = this.value;
+          refreshPreview();
+        });
+      } else if (chartTypes.includes(card.type)) {
+        document.getElementById('editUnit').addEventListener('input', function() {
+          card.unit = this.value;
+          refreshPreview();
+        });
+        document.querySelectorAll('.editNum').forEach(inp => {
+          inp.addEventListener('input', function() {
+            const idx = parseInt(this.dataset.idx);
+            card.nums[idx] = parseFloat(this.value) || 0;
+            refreshPreview();
+          });
+        });
+        document.querySelectorAll('.editLabelText').forEach(inp => {
+          inp.addEventListener('input', function() {
+            const idx = parseInt(this.dataset.idx);
+            card.labels[idx] = this.value;
+            refreshPreview();
+          });
+        });
+        document.getElementById('addPointBtn').addEventListener('click', function() {
+          card.nums.push(0);
+          card.labels.push(card.type === 'timeline' ? String(2024 + card.nums.length) : '新项');
+          showCard(activeIndex);
+        });
+        document.getElementById('delPointBtn').addEventListener('click', function() {
+          if (card.nums.length > 1) {
+            card.nums.pop();
+            card.labels.pop();
+            showCard(activeIndex);
+          }
+        });
+      } else if (card.type === 'vs') {
+        const bind = (id, fn) => document.getElementById(id).addEventListener('input', fn);
+        bind('vsLeftLabel', function() { card.left = card.left || {}; card.left.label = this.value; refreshPreview(); });
+        bind('vsLeftVal', function() { card.left = card.left || {}; card.left.value = parseFloat(this.value) || 0; refreshPreview(); });
+        bind('vsLeftUnit', function() { card.left = card.left || {}; card.left.unit = this.value; refreshPreview(); });
+        bind('vsRightLabel', function() { card.right = card.right || {}; card.right.label = this.value; refreshPreview(); });
+        bind('vsRightVal', function() { card.right = card.right || {}; card.right.value = parseFloat(this.value) || 0; refreshPreview(); });
+        bind('vsRightUnit', function() { card.right = card.right || {}; card.right.unit = this.value; refreshPreview(); });
+      } else if (card.type === 'tags') {
+        document.getElementById('editTags').addEventListener('input', function() {
+          card.labels = this.value.split('\n').map(x => x.trim()).filter(Boolean).slice(0, 5);
+          refreshPreview();
+        });
+        document.getElementById('editTitle').addEventListener('input', function() {
+          card.title = this.value;
+          refreshPreview();
+        });
+      } else if (card.type === 'quote' || card.type === 'title') {
+        document.getElementById('editCardText').addEventListener('input', function() {
+          card.text = this.value;
+          if (card.type === 'title') card.label = this.value;
+          refreshPreview();
+        });
+      }
+    }
+
+    // ================================
+    //  导出 PNG（transparent=true 时输出透明背景 PNG）
+    // ================================
+    const EXPORT_STATIC_CSS = `
+      *{animation:none!important}
+      .ringSweep,.lineDraw{stroke-dashoffset:var(--to,0)!important}
+      .odoCol{transform:translateY(var(--d,0px))!important}
+      .gaugeNeedle{transform:rotate(var(--nd,0deg))!important}
+      .ulSweep{transform:scaleX(1)!important}
+      .vsBadge{transform:rotate(-8deg)!important}
+      .raceBar{width:var(--w,100px)!important}
+    `;
+    // 渲染静态完成帧标记：禁用全部动画、进度环/折线落到终态；透明导出时清除描边避免灰边
+    function renderCardStaticMarkup(card, transparent) {
+      transparentShell = !!transparent;
+      let m = renderCard(card);
+      transparentShell = false;
+      m = m.replace(/<animate\b[^>]*\/>/g, '');
+      if (transparent) {
+        m = m.replace(/ stroke="url\(#glassStroke\)" stroke-width="2"/g, '');
+        m = m.replace(/ style="[^"]*box-shadow[^"]*"/g, '');
+      }
+      m = m.replace('</style>', EXPORT_STATIC_CSS + '</style>');
+      return m;
+    }
+    function svgMarkupToPngBytes(svgMarkup, transparent, themeKey) {
+      return new Promise((resolve, reject) => {
+        const svgStr = '<?xml version="1.0" encoding="UTF-8"?>\n' + svgMarkup;
+        const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          canvas.width = CANVAS.w;
+          canvas.height = CANVAS.h;
+          const ctx = canvas.getContext('2d');
+          if (!transparent) {
+            const th = THEMES[themeKey] || THEMES[currentTheme];
+            ctx.fillStyle = mixHex(th.bg1, th.bg2);
+            ctx.fillRect(0, 0, CANVAS.w, CANVAS.h);
+          }
+          ctx.drawImage(img, 0, 0, CANVAS.w, CANVAS.h);
+          URL.revokeObjectURL(url);
+          canvas.toBlob(b => {
+            if (!b) { reject(new Error('toBlob 失败')); return; }
+            b.arrayBuffer().then(ab => resolve(new Uint8Array(ab)));
+          }, 'image/png');
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG 加载失败')); };
+        img.src = url;
+      });
+    }
+    // 导出完成提示条
+    function showToast(msg) {
+      const el = document.getElementById('exportToast');
+      if (!el) return;
+      el.textContent = msg;
+      el.style.opacity = '1';
+      el.style.transform = 'translateX(-50%) translateY(0)';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(-50%) translateY(20px)'; }, 3600);
+    }
+    // 通过本地服务器保存到导出目录（D:\下载，固定位置，用户一定能找到）
+    async function serverSave(blob, defaultName) {
+      try {
+        const buf = new Uint8Array(await blob.arrayBuffer());
+        let bin = ''; const CH = 0x8000;
+        for (let i = 0; i < buf.length; i += CH) bin += String.fromCharCode.apply(null, buf.subarray(i, Math.min(i + CH, buf.length)));
+        const r = await fetch('/api/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: defaultName, data: btoa(bin) })
+        });
+        const j = await r.json();
+        if (j.ok) return j.path;
+        return null;
+      } catch (e) { return null; }
+    }
+    // 保存：服务器直写 D:\下载（固定位置，保存后自动打开资源管理器并选中文件）→ 浏览器下载兜底
+    async function writeOrDownload(blob, defaultName) {
+      const savedPath = await serverSave(blob, defaultName);
+      if (savedPath) {
+        showToast('✅ 已保存：' + savedPath);
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = defaultName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 5000);
+      showToast('已导出：' + defaultName + '（保存在浏览器下载目录）');
+    }
+    async function exportPng(transparent) {
+      try {
+        const card = cards[activeIndex];
+        if (!card) return;
+        const fname = transparent ? `card_${activeIndex+1}_transparent.png` : `card_${activeIndex+1}.png`;
+        const bytes = await svgMarkupToPngBytes(renderCardStaticMarkup(card, transparent), transparent, themeOfCard(card));
+        const blob = new Blob([bytes], { type: 'image/png' });
+        await writeOrDownload(blob, fname);
+      } catch (e) { alert('截图错误：' + e.message); }
+    }
+
+    // ================================
+    //  导出卡片动效视频：Canvas 纯绘制（逐帧"时间平移 + 动画冻结"）
+    //  背景：drawImage() 按规范只取动画图像首帧（poster frame），持久 Image 永远静止；
+    //        且 <img> 中 CSS 动画的光栅化时机不受控，直接录会画面漂移。
+    //  方案：每帧生成一张静态 SVG——所有 animation-delay 平移 -T（负延迟 = 已播放 T 秒），
+    //        并注入 animation-play-state:paused 冻结，使"无论何时光栅化"都得到动效第 T 秒的确定画面。
+    //  两段式帧管线（防卡顿关键）：loadImage（Blob URL → Image，onload 完成 XML 解析，可并行）
+    //        → rasterize（Image → 帧专属离屏 canvas，同步光栅化在生成协程完成，不占录制时钟）；
+    //        录制循环 paint 只做 canvas→canvas 位图拷贝（<2ms）。
+    //        旧版把光栅化推迟到录制循环 drawImage(img)，每帧同步卡 30~100ms → rAF 停摆 →
+    //        captureStream 丢帧，即导出视频卡顿的根因。decode()/createImageBitmap() 对 SVG 源
+    //        不可靠（不 settle/悬挂/空位图，曾致整段视频空白），均弃用。
+    //  rAF 绘制 + captureStream(30) + MediaRecorder 8Mbps（MP4/H.264 优先）
+    // ================================
+    let videoRecording = false; // 录制中：锁定键盘/点击交互与自动轮播
+    function pickVideoMime() {
+      const cands = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'];
+      if (!window.MediaRecorder) return '';
+      for (const m of cands) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (e) {} }
+      return '';
+    }
+    // 将 SVG 内所有 CSS 动画整体平移 -T 秒（负延迟 = 已播放 T 秒），并注入 animation-play-state:paused；
+    // 冻结后无论浏览器何时对图片光栅化，画面恒等于"动效播放到第 T 秒"的确定状态
+    function shiftSvgTime(svg, T) {
+      let s = svg;
+      if (T > 0) {
+        // 1) var 形式延迟：.odoCol/--dl、.raceRow/--rd、.tw/--td、.nodeDot、.tagCaps 等
+        s = s.replace(/animation-delay:\s*var\((--[A-Za-z][\w-]*),\s*(-?[\d.]+)s\)/g,
+          (m, v, f) => `animation-delay:calc(var(${v},${f}s) - ${T}s)`);
+        // 2) 字面量延迟（规则级与内联 stagger）
+        s = s.replace(/animation-delay:\s*(-?[\d.]+)s/g,
+          (m, t) => `animation-delay:calc(${t}s - ${T}s)`);
+        // 3) animation 简写：第 1 个时间量是时长（保留），第 2 个及以后是延迟（平移）；
+        //    仅 1 个时间量（无延迟声明）→ 追加 -T（入场动画定位到 T 时刻，infinite 循环取正确相位）
+        s = s.replace(/animation:\s*[^;"}]+/g, (decl) => {
+          const toks = decl.split(/\s+/);
+          let nTime = 0;
+          const out = toks.map(tk => {
+            const mv = /^var\((--[A-Za-z][\w-]*),\s*(-?[\d.]+)s\)$/.exec(tk);
+            const mt = /^(-?[\d.]+)s$/.exec(tk);
+            if (mv || mt) {
+              nTime++;
+              if (nTime >= 2) return mv ? `calc(var(${mv[1]},${mv[2]}s) - ${T}s)` : `calc(${mt[1]}s - ${T}s)`;
+            }
+            return tk;
+          });
+          if (nTime === 1) out.push(`calc(0s - ${T}s)`);
+          return out.join(' ');
+        });
+      }
+      // 冻结全部动画（T=0 同样注入：静止在起始状态，与实时预览第 0 秒画面一致）
+      if (/<\/svg>\s*$/.test(s)) s = s.replace(/<\/svg>\s*$/, '<style>*{animation-play-state:paused !important}</style></svg>');
+      return s;
+    }
+    // 共享录制管线：opts = { card, mime, svgBase, bg, fileTag, btnId, btnLabel }
+    //   普通导出：svgBase=完整卡片（含背景），bg=主题底色
+    //   键控底导出：svgBase=裸素材（无背景/面板/页眉），bg=键控色（纯绿/纯品红）
+    async function recordCardVideo(opts) {
+      const card = opts.card;
+      const mime = opts.mime; // 由入口选定（MP4/H.264 优先，浏览器不支持时入口已提前提示并返回）
+      const dur = Math.max(1, cardDuration(card)); // 编辑面板"时长"，未设置按类型默认
+      const fps = 30;
+      const total = Math.max(1, Math.ceil(dur * fps));
+      const btn = document.getElementById(opts.btnId);
+      const wasAuto = autoPlay;
+
+      // 录制期间暂停一切自动行为与交互
+      pausePlayback();
+      stopAutoTimer();
+      videoRecording = true;
+      if (btn) { btn.disabled = true; btn.textContent = '⏺ 生成动效帧…'; }
+
+      const W = CANVAS.w, H = CANVAS.h; // 9:16 → 1080x1920（SVG 固有尺寸一致，1:1 绘制不缩放）
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d', { alpha: false });
+      const bg = opts.bg;
+      const svgBase = opts.svgBase;
+      const frames = new Array(total).fill(null); // 帧 Image（弃用 ImageBitmap：对 SVG 源悬挂）
+      const urls = new Array(total).fill('');
+      let genCursor = 0, paintedK = -1, rafId = 0, rec = null;
+
+      const release = k => {
+        frames[k] = null; // 离屏 canvas 直接丢引用，GC 回收
+        if (urls[k]) { URL.revokeObjectURL(urls[k]); urls[k] = ''; }
+      };
+      const cleanup = () => {
+        cancelAnimationFrame(rafId);
+        for (let k = 0; k < total; k++) release(k);
+        videoRecording = false;
+        // batch 模式：按钮与轮播由批量导出外层统一收尾，避免逐卡反复启停
+        if (opts.batch) return;
+        if (btn) { btn.disabled = false; btn.textContent = opts.btnLabel; }
+        if (wasAuto) startAutoTimer(); // 恢复原轮播状态
+      };
+      // 保存位置固定为 D:\下载（服务器直写），导出完成后自动打开文件夹
+      const fname = opts.fname;
+      // 帧管线（两段式，防卡顿的关键）：
+      //  ① loadImage：平移+冻结的 SVG → Blob URL → Image（onload 完成 XML 解析，可多帧并行）
+      //  ② rasterize：Image → 该帧专属离屏 canvas，同步光栅化发生在生成协程里——绝不占录制时钟
+      // paint 只做 canvas→canvas 位图拷贝（<2ms），录制循环内零解析、零光栅化
+      const loadImage = k => Promise.race([
+        new Promise((res, rej) => {
+          const T = (k / fps).toFixed(4);
+          const str = '<?xml version="1.0" encoding="UTF-8"?>\n' + shiftSvgTime(svgBase, T);
+          urls[k] = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml;charset=utf-8' }));
+          const img = new Image();
+          img.onload = () => res(img);
+          img.onerror = () => { URL.revokeObjectURL(urls[k]); urls[k] = ''; rej(new Error('第 ' + (k + 1) + ' 帧加载失败')); };
+          img.src = urls[k];
+        }),
+        new Promise((res, rej) => setTimeout(() => rej(new Error('第 ' + (k + 1) + ' 帧加载超时')), 3000))
+      ]);
+      const rasterize = (k, img) => {
+        const c = document.createElement('canvas');
+        c.width = W;
+        c.height = H;
+        c.getContext('2d').drawImage(img, 0, 0, W, H); // 预光栅化：SVG → 位图，完成后录制循环只做拷贝
+        frames[k] = c;
+        URL.revokeObjectURL(urls[k]); // 位图已生成，URL 立即释放
+        urls[k] = '';
+      };
+      const paint = k => {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        ctx.drawImage(frames[k], 0, 0, W, H); // canvas→canvas 位图拷贝，GPU 加速
+      };
+      // 后台流水线：BATCH 张并行加载（XML 解析并发）+ 逐张光栅化；
+      // 领先播放 15 帧即等待消费控内存；批内单帧失败仅跳过该帧，不中断整体
+      const BATCH = 3;
+      const genLoop = async (until) => {
+        const end = until || total;
+        while (genCursor < end && videoRecording) {
+          if (genCursor - paintedK > 15) { await new Promise(r => setTimeout(r, 30)); continue; }
+          const ks = [];
+          for (let k = genCursor; k < Math.min(end, genCursor + BATCH); k++) ks.push(k);
+          const imgs = await Promise.all(ks.map(k => loadImage(k).catch(() => null)));
+          ks.forEach((k, i) => { if (imgs[i]) { try { rasterize(k, imgs[i]); } catch (e) { /* 该帧丢弃，播放时保留上一帧 */ } } });
+          genCursor += ks.length;
+        }
+      };
+
+      try {
+        await genLoop(Math.min(12, total)); // 开录前预填 12 帧缓冲（≈0.4s）：确保生成速度有余量，杜绝开录即卡
+        paint(0); // 先渲染第一帧
+        paintedK = 0;
+        genLoop(); // 后台继续补帧
+        await new Promise(r => setTimeout(r, 200)); // 稳定 200ms（至少完成一帧渲染）再启动录制，避免首帧空白
+
+        replayAnimation(true); // 预览框同步重播当前卡片，便于观察
+        const cstream = canvas.captureStream(30);
+        rec = new MediaRecorder(cstream, { mimeType: mime, videoBitsPerSecond: 8000000 });
+        const chunks = [];
+        rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = () => {
+          cleanup();
+          if (!chunks.length) return;
+          const blobOut = new Blob(chunks, { type: mime.split(';')[0] });
+          if (opts.collect) { opts.onCollect(blobOut, fname); return; }
+          writeOrDownload(blobOut, fname);
+        };
+        rec.start();
+        if (btn) btn.textContent = `⏺ 录制中 0.0/${dur.toFixed(1)}s`;
+        const t0 = performance.now();
+        rafId = requestAnimationFrame(function loop() {
+          const now = performance.now();
+          const k = Math.min(total - 1, Math.floor((now - t0) / 1000 * fps));
+          // 取"不超前于播放时刻"的最新已就绪帧：生成偶发落后时画布保留上一帧（不闪空白、不跳未来）
+          let kk = k;
+          while (kk > paintedK && !(frames[kk] && frames[kk].width > 0)) kk--;
+          if (kk > paintedK) {
+            paint(kk);
+            for (let j = 0; j <= kk; j++) release(j); // 释放已消费/已跳过帧（含加载失败帧遗留的 URL）
+            paintedK = kk;
+          }
+          if (btn && k % 4 === 0) btn.textContent = `⏺ 录制中 ${Math.min(dur, (now - t0) / 1000).toFixed(1)}/${dur.toFixed(1)}s`;
+          if (now - t0 >= dur * 1000) { if (rec.state !== 'inactive') rec.stop(); return; }
+          rafId = requestAnimationFrame(loop);
+        });
+      } catch (e) {
+        cleanup();
+        alert('视频导出失败：' + (e && e.message ? e.message : e));
+      }
+    }
+
+    // ================================
+    //  WebCodecs 版导出：可精确控制关键帧间隔（每 1 秒）与码率，
+    //  根治 MediaRecorder 的 GOP 过长（3s 仅 1 关键帧）与码率参数不生效（8Mbps→548Kbps）导致的播放卡顿
+    // ================================
+    function muxMP4({ width, height, fps, timescale = 90000, description, chunks }) {
+      const box = (type, ...payloads) => {
+        const size = 8 + payloads.reduce((s, p) => s + p.length, 0);
+        const buf = new Uint8Array(size);
+        const dv = new DataView(buf.buffer);
+        dv.setUint32(0, size);
+        for (let i = 0; i < 4; i++) buf[4 + i] = type.charCodeAt(i);
+        let off = 8;
+        for (const p of payloads) { buf.set(p, off); off += p.length; }
+        return buf;
+      };
+      const u32 = v => { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v); return b; };
+      const u16 = v => { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, v); return b; };
+      const zeros = n => new Uint8Array(n);
+      const MATRIX = new Uint8Array([
+        0x00,0x01,0x00,0x00, 0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00,
+        0x00,0x00,0x00,0x00, 0x00,0x01,0x00,0x00, 0x00,0x00,0x00,0x00,
+        0x00,0x00,0x00,0x00, 0x00,0x00,0x00,0x00, 0x40,0x00,0x00,0x00
+      ]);
+      const mvhd = (ts, dur) => box('mvhd', u32(0), u32(0), u32(0), u32(ts), u32(dur), u32(0x00010000), u16(0x0100), zeros(10), MATRIX, zeros(24), u32(2));
+      const tkhd = (ts, dur, w, h) => box('tkhd', u32(0x00000007), u32(0), u32(0), u32(1), u32(0), u32(dur), zeros(8), u16(0), u16(0), u16(0x0100), zeros(2), MATRIX, u32(w << 16), u32(h << 16));
+      const mdhd = (ts, dur) => box('mdhd', u32(0), u32(0), u32(0), u32(ts), u32(dur), u16(0x55C4), u16(0));
+      const hdlr = () => box('hdlr', u32(0), u32(0), new Uint8Array([0x76,0x69,0x64,0x65]), zeros(12), new Uint8Array([0x56,0x69,0x64,0x65,0x6f,0x48,0x61,0x6e,0x64,0x6c,0x65,0x72,0x00]));
+      const vmhd = () => box('vmhd', u32(0x00000001), u16(0), u16(0), u16(0), u16(0));
+      const dref = () => box('dref', u32(0), u32(1), box('url ', u32(0x00000001)));
+      const avcCBox = d => box('avcC', new Uint8Array(d));
+      const avc1Box = (w, h, d) => {
+        const dd = new Uint8Array(d);
+        const head = new Uint8Array(78);
+        const dv = new DataView(head.buffer);
+        dv.setUint16(6, 1); dv.setUint16(24, w); dv.setUint16(26, h);
+        dv.setUint32(28, 0x00480000); dv.setUint32(32, 0x00480000);
+        dv.setUint16(40, 1); dv.setUint16(74, 0x0018); dv.setInt16(76, -1);
+        return box('avc1', head, avcCBox(dd));
+      };
+      const stsd = (w, h, d) => box('stsd', u32(0), u32(1), avc1Box(w, h, d));
+      const stts = (fps, ts, count) => box('stts', u32(0), u32(1), u32(count), u32(Math.round(ts / fps)));
+      const stsc = () => box('stsc', u32(0), u32(1), u32(1), u32(1), u32(1));
+      const stsz = sizes => { const body = [u32(0), u32(0), u32(sizes.length)]; for (const s of sizes) body.push(u32(s)); return box('stsz', ...body); };
+      const stco = offsets => { const body = [u32(0), u32(offsets.length)]; for (const o of offsets) body.push(u32(o)); return box('stco', ...body); };
+      const stss = keys => { const body = [u32(0), u32(keys.length)]; for (const k of keys) body.push(u32(k)); return box('stss', ...body); };
+      const stbl = (w, h, d, fps, ts, sizes, offsets, keys) => box('stbl', stsd(w, h, d), stts(fps, ts, sizes.length), stsc(), stsz(sizes), stco(offsets), stss(keys));
+      const minf = (w, h, d, fps, ts, sizes, offsets, keys) => box('minf', vmhd(), box('dinf', dref()), stbl(w, h, d, fps, ts, sizes, offsets, keys));
+      const mdia = (w, h, d, fps, ts, dur, sizes, offsets, keys) => box('mdia', mdhd(ts, dur), hdlr(), minf(w, h, d, fps, ts, sizes, offsets, keys));
+      // edts/elst：标准编辑列表（media_time=0、media_rate=1.0），与 ffmpeg 等主流封装器一致，
+      // 避免部分播放器（如 Windows 自带播放器）对缺失编辑列表的兼容问题
+      const edts = (ts, dur) => box('edts', box('elst', u32(0), u32(1), u32(dur), u32(0), u32(0x00010000)));
+      const trak = (w, h, d, fps, ts, dur, sizes, offsets, keys) => box('trak', tkhd(ts, dur, w, h), edts(ts, dur), mdia(w, h, d, fps, ts, dur, sizes, offsets, keys));
+      const moov = (w, h, d, fps, ts, dur, sizes, offsets, keys) => box('moov', mvhd(ts, dur), trak(w, h, d, fps, ts, dur, sizes, offsets, keys));
+      const ftyp = () => box('ftyp', new Uint8Array([0x69,0x73,0x6f,0x6d]), u32(0x00000200), new Uint8Array([0x69,0x73,0x6f,0x6d]), new Uint8Array([0x69,0x73,0x6f,0x32]), new Uint8Array([0x61,0x76,0x63,0x31]), new Uint8Array([0x6d,0x70,0x34,0x31]));
+      const count = chunks.length;
+      const duration = Math.round(timescale / fps * count);
+      const sizes = new Array(count);
+      const offsets = new Array(count);
+      let dataLen = 0;
+      for (let i = 0; i < count; i++) { sizes[i] = chunks[i].data.length; dataLen += chunks[i].data.length; }
+      const mdatData = new Uint8Array(dataLen);
+      let off = 0;
+      for (let i = 0; i < count; i++) { mdatData.set(chunks[i].data, off); offsets[i] = off; off += chunks[i].data.length; }
+      const mdat = box('mdat', mdatData);
+      const ftypBox = ftyp();
+      const keys = [];
+      chunks.forEach((c, i) => { if (c.type === 'key') keys.push(i + 1); });
+      // faststart：moov 前置到文件头（ftyp + moov + mdat）。
+      // stco 条目数固定，moov 尺寸与偏移值无关，故先用占位偏移构建一次得到 moov 尺寸，
+      // 再以真实偏移重建。元数据前置后：下载中断时播放器仍能读到完整元数据，且更兼容剪映等编辑器
+      const moovSize = moov(width, height, description, fps, timescale, duration, sizes, offsets.map(() => 0), keys).length;
+      const mdatStart = ftypBox.length + moovSize + 8;
+      const absOffsets = offsets.map(o => mdatStart + o);
+      const moovBox = moov(width, height, description, fps, timescale, duration, sizes, absOffsets, keys);
+      const out = new Uint8Array(ftypBox.length + moovBox.length + mdat.length);
+      out.set(ftypBox, 0);
+      out.set(moovBox, ftypBox.length);
+      out.set(mdat, ftypBox.length + moovBox.length);
+      return out;
+    }
+    async function webcodecsAvcSupported() {
+      if (!('VideoEncoder' in window)) return false;
+      try {
+        // 1080x1920 需 High profile level 4.0+；Baseline(avc1.42E01E) 在此分辨率不被支持
+        const s = await VideoEncoder.isConfigSupported({ codec: 'avc1.640028', width: CANVAS.w, height: CANVAS.h, bitrate: 6000000, framerate: 30 });
+        return !!s.supported;
+      } catch (e) { return false; }
+    }
+    async function recordCardVideoWC(opts) {
+      const card = opts.card;
+      const dur = Math.max(1, cardDuration(card));
+      const fps = 30;
+      const total = Math.max(1, Math.ceil(dur * fps));
+      const btn = document.getElementById(opts.btnId);
+      const wasAuto = autoPlay;
+      pausePlayback();
+      stopAutoTimer();
+      videoRecording = true;
+      if (btn) { btn.disabled = true; btn.textContent = '⏺ 生成动效帧…'; }
+
+      const W = CANVAS.w, H = CANVAS.h;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d', { alpha: false });
+      const bg = opts.bg;
+      const svgBase = opts.svgBase;
+      const frames = new Array(total).fill(null);
+      const urls = new Array(total).fill('');
+      let genCursor = 0, paintedK = -1, rafId = 0;
+
+      const release = k => {
+        frames[k] = null;
+        if (urls[k]) { URL.revokeObjectURL(urls[k]); urls[k] = ''; }
+      };
+      const cleanup = () => {
+        cancelAnimationFrame(rafId);
+        for (let k = 0; k < total; k++) release(k);
+        videoRecording = false;
+        // batch 模式：按钮与轮播由批量导出外层统一收尾，避免逐卡反复启停
+        if (opts.batch) return;
+        if (btn) { btn.disabled = false; btn.textContent = opts.btnLabel; }
+        if (wasAuto) startAutoTimer();
+      };
+      // 保存位置固定为 D:\下载（服务器直写），导出完成后自动打开文件夹
+      const fname = opts.fname;
+      const loadImage = k => Promise.race([
+        new Promise((res, rej) => {
+          const T = (k / fps).toFixed(4);
+          const str = '<?xml version="1.0" encoding="UTF-8"?>\n' + shiftSvgTime(svgBase, T);
+          urls[k] = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml;charset=utf-8' }));
+          const img = new Image();
+          img.onload = () => res(img);
+          img.onerror = () => { URL.revokeObjectURL(urls[k]); urls[k] = ''; rej(new Error('第 ' + (k + 1) + ' 帧加载失败')); };
+          img.src = urls[k];
+        }),
+        new Promise((res, rej) => setTimeout(() => rej(new Error('第 ' + (k + 1) + ' 帧加载超时')), 3000))
+      ]);
+      const rasterize = (k, img) => {
+        const c = document.createElement('canvas');
+        c.width = W;
+        c.height = H;
+        c.getContext('2d').drawImage(img, 0, 0, W, H);
+        frames[k] = c;
+        URL.revokeObjectURL(urls[k]);
+        urls[k] = '';
+      };
+      const BATCH = 3;
+      const genLoop = async (until) => {
+        const end = until || total;
+        while (genCursor < end && videoRecording) {
+          if (genCursor - paintedK > 15) { await new Promise(r => setTimeout(r, 30)); continue; }
+          const ks = [];
+          for (let k = genCursor; k < Math.min(end, genCursor + BATCH); k++) ks.push(k);
+          const imgs = await Promise.all(ks.map(k => loadImage(k).catch(() => null)));
+          ks.forEach((k, i) => { if (imgs[i]) { try { rasterize(k, imgs[i]); } catch (e) {} } });
+          genCursor += ks.length;
+        }
+      };
+
+      const bitrate = W * H > 1500000 ? 6000000 : 4000000;
+      const chunks = [];
+      let description = null, encError = null;
+      const encoder = new VideoEncoder({
+        output: (chunk, meta) => {
+          const buf = new Uint8Array(chunk.byteLength);
+          chunk.copyTo(buf);
+          chunks.push({ data: buf, type: chunk.type });
+          if (!description && meta && meta.decoderConfig && meta.decoderConfig.description) {
+            description = new Uint8Array(meta.decoderConfig.description);
+          }
+        },
+        error: e => { encError = e; }
+      });
+      encoder.configure({ codec: 'avc1.640028', width: W, height: H, bitrate, framerate: fps, avc: { format: 'avc' } });
+
+      try {
+        await genLoop(Math.min(12, total));
+        genLoop(); // 后台继续补帧（缺此行会导致只编码预填的 12 帧后画面冻结）
+        const t0 = performance.now();
+        await new Promise((resolve) => {
+          rafId = requestAnimationFrame(function loop() {
+            const now = performance.now();
+            const k = Math.min(total - 1, Math.floor((now - t0) / 1000 * fps));
+            let kk = k;
+            while (kk > paintedK && !(frames[kk] && frames[kk].width > 0)) kk--;
+            if (kk > paintedK) {
+              // 编码 paintedK+1..kk 之间所有就绪帧：rAF 慢（低刷新/省电）时 kk 会一次跳多帧，
+              // 只编最高帧会丢中间帧导致视频跳变
+              for (let j = paintedK + 1; j <= kk; j++) {
+                if (!(frames[j] && frames[j].width > 0)) continue;
+                try {
+                  const vf = new VideoFrame(frames[j], { timestamp: Math.round(j * 1e6 / fps), duration: Math.round(1e6 / fps) });
+                  encoder.encode(vf, { keyFrame: j % fps === 0 });
+                  vf.close();
+                } catch (e) {}
+              }
+              for (let j = 0; j <= kk; j++) release(j);
+              paintedK = kk;
+            }
+            if (btn && k % 4 === 0) btn.textContent = `⏺ 编码中 ${Math.min(dur, (now - t0) / 1000).toFixed(1)}/${dur.toFixed(1)}s`;
+            // 编完全部帧才结束（生成偶发落后时继续等，避免视频尾部被截断）；5s 兜底防挂死
+            if (paintedK >= total - 1 || now - t0 >= (dur + 5) * 1000) { resolve(); return; }
+            rafId = requestAnimationFrame(loop);
+          });
+        });
+        await encoder.flush();
+        encoder.close();
+        if (encError) throw encError;
+        if (!description || !chunks.length) throw new Error('编码未产生数据');
+        const mp4 = muxMP4({ width: W, height: H, fps, description, chunks });
+        const blobOut = new Blob([mp4], { type: 'video/mp4' });
+        if (opts.collect) await opts.onCollect(blobOut, opts.fname);
+        else await writeOrDownload(blobOut, fname);
+        cleanup();
+      } catch (e) {
+        cleanup();
+        alert('视频导出失败：' + (e && e.message ? e.message : e));
+      }
+    }
+
+    // 完整背景版：录当前卡片完整动效（含背景/面板/页眉/角标）
+    // 优先 WebCodecs（关键帧每 1s + 码率精确可控，根治播放卡顿）；不支持时降级 MediaRecorder
+    async function exportCardVideo() {
+      const card = cards[activeIndex];
+      if (!card || videoRecording) return;
+      const fname = `card_动效_${String(activeIndex + 1).padStart(3, '0')}.mp4`;
+      const opts = {
+        card,
+        svgBase: renderCard(card),
+        bg: mixHex(themeForCard(card).bg1, themeForCard(card).bg2),
+        fileTag: '动效',
+        btnId: 'exportVideoBtn',
+        btnLabel: '📲 导出手机视频(MP4)',
+        fname
+      };
+      if (await webcodecsAvcSupported()) { await recordCardVideoWC(opts); return; }
+      const mime = pickVideoMime();
+      if (!mime) { alert('当前浏览器不支持视频编码，请使用新版 Chrome / Edge。'); return; }
+      await recordCardVideo({ ...opts, mime });
+    }
+
+    // 键控色按主题自动避让：与主题 accent/accent2 距离最远的候选色胜出
+    //（霓虹暗夜含荧光绿 #00FF88、深蓝金含青绿 #35d0a5 → 自动用品红幕；其余主题用绿幕）
+    const KEY_COLORS = [
+      { c: '#00FF00', tag: '绿幕' },
+      { c: '#FF00FF', tag: '品红幕' }
+    ];
+    function pickKeyColor(card) {
+      const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+      const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+      const t = themeForCard(card);
+      let best = KEY_COLORS[0], bestD = -1;
+      for (const k of KEY_COLORS) {
+        const kc = rgb(k.c);
+        const d = Math.min(dist(kc, rgb(t.accent)), dist(kc, rgb(t.accent2)));
+        if (d > bestD) { bestD = d; best = k; }
+      }
+      return best;
+    }
+
+    // 键控底动效素材（博主叠加用）：无背景/无面板/无页眉/无角标，仅核心内容动效浮于键控色上。
+    // 剪映流程：素材拖入"画中画"轨道置于口播视频上方 → 抠像·色度抠图 → 取色器点底色 → 调强度即抠除
+    async function exportGreenVideo() {
+      const card = cards[activeIndex];
+      if (!card || videoRecording) return;
+      const key = pickKeyColor(card);
+      const fname = `card_${key.tag}_${String(activeIndex + 1).padStart(3, '0')}.mp4`;
+      const ps = transparentShell, pb = bareShell;
+      transparentShell = true; bareShell = true; // 裸素材：省略背景层 + 面板/页眉/角标
+      const svgBase = renderCard(card);
+      transparentShell = ps; bareShell = pb;
+      const opts = {
+        card,
+        svgBase,
+        bg: key.c,
+        fileTag: key.tag,
+        btnId: 'exportGreenBtn',
+        btnLabel: '🟢 导出绿幕动效视频(MP4)',
+        fname
+      };
+      if (await webcodecsAvcSupported()) { await recordCardVideoWC(opts); return; }
+      const mime = pickVideoMime();
+      if (!mime) { alert('当前浏览器不支持视频编码，请使用新版 Chrome / Edge。'); return; }
+      await recordCardVideo({ ...opts, mime });
+    }
+
+    // ================================
+    //  导出视频序列（ZIP：Shot_NNN.png + 时间线说明.txt）
+    // ================================
+    const CRC_TABLE = (() => {
+      const t = new Uint32Array(256);
+      for (let n = 0; n < 256; n++) {
+        let c = n;
+        for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        t[n] = c >>> 0;
+      }
+      return t;
+    })();
+    function crc32(bytes) {
+      let c = 0xFFFFFFFF;
+      for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+      return (c ^ 0xFFFFFFFF) >>> 0;
+    }
+    // 极简 ZIP 打包（store 模式，无压缩；PNG 本身已压缩）
+    function buildZip(files) {
+      const enc = new TextEncoder();
+      const parts = [];
+      const central = [];
+      let offset = 0;
+      const now = new Date();
+      const dosTime = ((now.getHours() & 0x1F) << 11) | ((now.getMinutes() & 0x3F) << 5) | ((now.getSeconds() / 2) & 0x1F);
+      const dosDate = (((now.getFullYear() - 1980) & 0x7F) << 9) | (((now.getMonth() + 1) & 0x0F) << 5) | (now.getDate() & 0x1F);
+      files.forEach(f => {
+        const nameBytes = enc.encode(f.name);
+        const crc = crc32(f.bytes);
+        const lh = new DataView(new ArrayBuffer(30));
+        lh.setUint32(0, 0x04034b50, true);
+        lh.setUint16(4, 20, true);
+        lh.setUint16(6, 0x0800, true);
+        lh.setUint16(8, 0, true);
+        lh.setUint16(10, dosTime, true);
+        lh.setUint16(12, dosDate, true);
+        lh.setUint32(14, crc, true);
+        lh.setUint32(18, f.bytes.length, true);
+        lh.setUint32(22, f.bytes.length, true);
+        lh.setUint16(26, nameBytes.length, true);
+        lh.setUint16(28, 0, true);
+        parts.push(new Uint8Array(lh.buffer), nameBytes, f.bytes);
+        const ch = new DataView(new ArrayBuffer(46));
+        ch.setUint32(0, 0x02014b50, true);
+        ch.setUint16(4, 20, true);
+        ch.setUint16(6, 20, true);
+        ch.setUint16(8, 0x0800, true);
+        ch.setUint16(10, 0, true);
+        ch.setUint16(12, dosTime, true);
+        ch.setUint16(14, dosDate, true);
+        ch.setUint32(16, crc, true);
+        ch.setUint32(20, f.bytes.length, true);
+        ch.setUint32(24, f.bytes.length, true);
+        ch.setUint16(28, nameBytes.length, true);
+        ch.setUint16(30, 0, true);
+        ch.setUint16(32, 0, true);
+        ch.setUint16(34, 0, true);
+        ch.setUint16(36, 0, true);
+        ch.setUint32(38, 0, true);
+        ch.setUint32(42, offset, true);
+        central.push(new Uint8Array(ch.buffer), nameBytes);
+        offset += 30 + nameBytes.length + f.bytes.length;
+      });
+      const cdSize = central.reduce((s, u) => s + u.length, 0);
+      const eocd = new DataView(new ArrayBuffer(22));
+      eocd.setUint32(0, 0x06054b50, true);
+      eocd.setUint16(4, 0, true);
+      eocd.setUint16(6, 0, true);
+      eocd.setUint16(8, files.length, true);
+      eocd.setUint16(10, files.length, true);
+      eocd.setUint32(12, cdSize, true);
+      eocd.setUint32(16, offset, true);
+      eocd.setUint16(20, 0, true);
+      return new Blob([...parts, ...central, new Uint8Array(eocd.buffer)], { type: 'application/zip' });
+    }
+    function buildTimelineText() {
+      const total = cards.reduce((s, c) => s + cardDuration(c), 0);
+      let out = `财经口播 · 视频序列说明\n`;
+      out += `生成时间：${new Date().toLocaleString('zh-CN')}\n`;
+      out += `共 ${cards.length} 个镜头 · 总时长约 ${total} 秒\n`;
+      out += `=${'='.repeat(46)}\n\n`;
+      cards.forEach((c, i) => {
+        out += `【Shot_${String(i + 1).padStart(3, '0')}】${TYPE_LABEL[c.type] || c.type}｜建议停留 ${cardDuration(c)} 秒\n`;
+        out += `原文：${String(c.text || '').trim()}\n\n`;
+      });
+      out += `=${'='.repeat(46)}\n`;
+      out += `使用方法：将 PNG 拖入剪映等剪辑软件，每张图拉长到对应秒数，即可铺满时间轴。\n`;
+      return out;
+    }
+    async function exportVideoSequence() {
+      if (!cards.length) { alert('请先生成卡片'); return; }
+      const btn = document.getElementById('exportSeqBtn');
+      const origText = btn.textContent;
+      btn.disabled = true;
+      const fname = `finance_shots_${cards.length}p.zip`;
+      try {
+        const files = [];
+        for (let i = 0; i < cards.length; i++) {
+          btn.textContent = `⏳ 生成中 ${i + 1}/${cards.length}`;
+          const bytes = await svgMarkupToPngBytes(renderCardStaticMarkup(cards[i], false), false, themeOfCard(cards[i]));
+          files.push({ name: `Shot_${String(i + 1).padStart(3, '0')}.png`, bytes: bytes });
+        }
+        btn.textContent = '⏳ 打包 ZIP…';
+        files.push({ name: '时间线说明.txt', bytes: new TextEncoder().encode(buildTimelineText()) });
+        const zipBlob = buildZip(files);
+        await writeOrDownload(zipBlob, fname);
+      } catch (e) { alert('导出失败：' + e.message); }
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+
+    // ================================
+    //  一键下载全部卡片：逐卡录制完整动效 MP4，打包为单个 ZIP
+    //  复用 recordCardVideo / recordCardVideoWC 的收集模式（opts.collect+batch），
+    //  全部完成后再 buildZip 一次直写 D:\下载
+    // ================================
+    async function exportAllVideos() {
+      if (!cards.length) { alert('请先生成卡片'); return; }
+      if (videoRecording) return;
+      const btn = document.getElementById('exportAllBtn');
+      const wasAuto = autoPlay;
+      pausePlayback(); stopAutoTimer(); videoRecording = true;
+      btn.disabled = true;
+      const collected = []; // { name:'Shot_001.mp4', bytes:Uint8Array }
+      const useWC = await webcodecsAvcSupported();
+      const mime = useWC ? '' : pickVideoMime();
+      if (!useWC && !mime) {
+        videoRecording = false; btn.disabled = false;
+        alert('当前浏览器不支持视频编码，请使用新版 Chrome / Edge。');
+        return;
+      }
+      try {
+        for (let i = 0; i < cards.length; i++) {
+          btn.textContent = `⏺ 正在生成 ${i + 1}/${cards.length}`;
+          await new Promise(r => setTimeout(r, 30)); // 让出事件循环以刷新按钮文案
+          const card = cards[i];
+          const t = themeForCard(card);
+          const opts = {
+            card,
+            svgBase: renderCard(card),
+            bg: mixHex(t.bg1, t.bg2),
+            btnId: 'exportAllBtn',
+            btnLabel: '⬇️ 一键下载全部卡片(MP4)',
+            fname: `Shot_${String(i + 1).padStart(3, '0')}.mp4`,
+            collect: true, batch: true,
+            onCollect: async (b) => {
+              collected.push({ name: opts.fname, bytes: new Uint8Array(await b.arrayBuffer()) });
+            }
+          };
+          if (useWC) await recordCardVideoWC(opts);
+          else await recordCardVideo({ ...opts, mime });
+        }
+        btn.textContent = '⏳ 打包 ZIP…';
+        await new Promise(r => setTimeout(r, 30));
+        if (!collected.length) throw new Error('未生成任何视频');
+        const fname = `card_动效_全部_${cards.length}张.zip`;
+        await writeOrDownload(buildZip(collected), fname);
+      } catch (e) { alert('批量导出失败：' + (e && e.message ? e.message : e)); }
+      videoRecording = false;
+      btn.disabled = false;
+      btn.textContent = '⬇️ 一键下载全部卡片(MP4)';
+      if (wasAuto) startAutoTimer();
+    }
+
+    // ================================
+    //  全屏演示
+    // ================================
+    function toggleFullscreen() {
+      document.getElementById('app').classList.toggle('fullscreen-mode');
+    }
+    function exitFullscreen() {
+      document.getElementById('app').classList.remove('fullscreen-mode');
+    }
+
+    // ================================
+    //  初始化
+    // ================================
+    const SAMPLE = `今年新能源汽车渗透率已经达到 42%，同比上涨 8 个百分点。
+  上半年营收 12.4 亿，环比增长 6.8%，净利润 3.2 亿。
+  一线、二线、三线城市的消费增速分别是 4.5%、6.2%、9.1%。
+  未来三年 AI 算力需求预计翻 3 倍。`;
+
+    function applyNewCards(list) {
+      cards = list;
+      if (!cards.length) { alert('没有解析到有效内容'); return; }
+      activeIndex = 0;
+      renderList();
+      // 清空两层
+      getLayerEl(0).innerHTML = '';
+      getLayerEl(1).innerHTML = '';
+      activeLayer = 0;
+      showCard(0);
+      // 关键：重新生成后立即写回本地存储，否则刷新时 tryRestore 会把旧的错卡读回来
+      saveState();
+    }
+
+    function generate() {
+      const text = document.getElementById('textInput').value.trim();
+      if (!text) { alert('请粘贴文案'); return; }
+      applyNewCards(parseShots(text));
+    }
+
+    function generateShots() {
+      const text = document.getElementById('textInput').value.trim();
+      if (!text) { alert('请粘贴文案'); return; }
+      applyNewCards(parseShots(text));
+    }
+
+    // 事件绑定
+    document.addEventListener('DOMContentLoaded', () => {
+      const restored = tryRestore();
+      if (!restored) document.getElementById('textInput').value = SAMPLE;
+      document.getElementById('textInput').addEventListener('input', saveState);
+      document.getElementById('btnGenerate').addEventListener('click', generate);
+      document.getElementById('btnSample').addEventListener('click', () => {
+        document.getElementById('textInput').value = SAMPLE;
+        generate();
+      });
+      document.getElementById('prevBtn').addEventListener('click', () => showCard(activeIndex - 1));
+      document.getElementById('nextBtn').addEventListener('click', () => showCard(activeIndex + 1));
+      document.getElementById('replayBtn').addEventListener('click', replayAnimation);
+      document.getElementById('exportPngBtn').addEventListener('click', () => exportPng(false));
+      document.getElementById('exportPngTransparentBtn').addEventListener('click', () => exportPng(true));
+      document.getElementById('exportSeqBtn').addEventListener('click', exportVideoSequence);
+      document.getElementById('exportVideoBtn').addEventListener('click', exportCardVideo);
+      document.getElementById('exportAllBtn').addEventListener('click', exportAllVideos);
+      document.getElementById('exportGreenBtn').addEventListener('click', exportGreenVideo);
+      document.getElementById('btnShots').addEventListener('click', generateShots);
+      document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+      document.getElementById('exitFullscreenBtn').addEventListener('click', exitFullscreen);
+      document.querySelectorAll('.rs-btn').forEach(b => b.addEventListener('click', () => setRatio(b.dataset.r)));
+      document.getElementById('btnAddCard').addEventListener('click', addNewCard);
+      document.getElementById('btnCopyCard').addEventListener('click', copyCurrentCard);
+      document.getElementById('editPanel').addEventListener('focusin', () => { pausePlayback(); stopAutoTimer(); });
+      // 播放控制条：点击先清除自动轮播定时器，再按播放状态决定是否重启
+      document.getElementById('pbPlay').addEventListener('click', () => {
+        stopAutoTimer();
+        if (playing) {
+          pausePlayback();
+          startAutoTimer(); // 暂停后恢复空闲轮播
+        } else {
+          playPlayback(); // 连播引擎接管（内部不再启动轮播）
+        }
+      });
+      document.getElementById('pbFirst').addEventListener('click', () => {
+        stopAutoTimer();
+        pausePlayback();
+        if (cards.length) showCard(0);
+        updatePlayhead(0);
+        startAutoTimer();
+      });
+      document.getElementById('pbNext').addEventListener('click', () => showCard(activeIndex + 1));
+      document.getElementById('pbLoop').addEventListener('click', function() {
+        loopPlay = !loopPlay;
+        this.classList.toggle('active', loopPlay);
+      });
+      // 空闲自动轮播开关（默认关闭）
+      document.getElementById('pbAuto').addEventListener('click', function() {
+        autoPlay = !autoPlay;
+        this.classList.toggle('active', autoPlay);
+        this.title = autoPlay ? '空闲自动轮播（已开启，点击关闭）' : '空闲自动轮播（默认关闭，点击开启）';
+        saveState();
+        if (autoPlay) startAutoTimer(); else stopAutoTimer();
+      });
+      // 键盘：Esc 退出全屏，左右键切换卡片，空格播放/暂停；录制视频期间全部锁定
+      document.addEventListener('keydown', e => {
+        if (videoRecording) return;
+        if (e.key === 'Escape') {
+          if (document.getElementById('app').classList.contains('fullscreen-mode')) exitFullscreen();
+          return;
+        }
+        if (e.key === ' ') {
+          const tag = (e.target.tagName || '').toLowerCase();
+          if (tag !== 'input' && tag !== 'textarea' && tag !== 'select' && tag !== 'button') {
+            e.preventDefault();
+            if (playing) pausePlayback(); else playPlayback();
+          }
+          return;
+        }
+        if (e.key === 'ArrowLeft') showCard(activeIndex - 1);
+        else if (e.key === 'ArrowRight') showCard(activeIndex + 1);
+      });
+
+      // 初始：有本地存档则恢复上次状态，否则用示例文案生成
+      if (restored) {
+        renderList();
+        showCard(activeIndex);
+      } else {
+        generate();
+      }
+      if (restoredRatio === '16:9') setRatio('16:9');
+      updatePlayhead(0);
+      // 按钮状态与 autoPlay 同步；仅勾选过才启动空闲轮播
+      const autoBtn = document.getElementById('pbAuto');
+      if (autoBtn) {
+        autoBtn.classList.toggle('active', autoPlay);
+        autoBtn.title = autoPlay ? '空闲自动轮播（已开启，点击关闭）' : '空闲自动轮播（默认关闭，点击开启）';
+      }
+      startAutoTimer();
+    });
+  </script>
+</body>
+</html>
