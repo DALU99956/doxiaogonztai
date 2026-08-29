@@ -299,7 +299,9 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
-      max-height: 240px;
+      /* 高度随视口自适应：优先占满可用的右侧列，尽量完整显示所有卡片；
+         窗口很高时用 60vh 封顶防溢出，很矮时保留最低 160px 以便内部滚动 */
+      max-height: clamp(160px, calc(100vh - 420px), 60vh);
       overflow-y: auto;
       padding-right: 4px;
     }
@@ -838,6 +840,7 @@
           </div>
           <div class="row" style="margin-top:6px;">
             <button class="btn btn-primary" id="btnGenerate" style="flex:1">⚡ 生成卡片</button>
+            <button class="btn btn-ghost btn-sm" id="btnClearText" title="一键清空文案输入框，方便直接输入新文案">🗑 清除文案</button>
             <button class="btn btn-ghost btn-sm" id="btnSample">示例</button>
           </div>
           <button class="btn btn-ghost" id="btnShots" style="width:100%;margin-top:6px;">🎬 智能拆解为镜头</button>
@@ -3904,12 +3907,22 @@
       applyNewCards(parseShots(text));
     }
 
+    // 一键清除文案：清空输入框并聚焦，方便直接输入新文案（不清除已生成卡片，点“生成卡片”会自动替换）
+    function clearTextInput() {
+      const t = document.getElementById('textInput');
+      t.value = '';
+      t.focus();
+      saveState();
+      showToast('文案已清除，可输入新文案');
+    }
+
     // 事件绑定
     document.addEventListener('DOMContentLoaded', () => {
       const restored = tryRestore();
       if (!restored) document.getElementById('textInput').value = SAMPLE;
       document.getElementById('textInput').addEventListener('input', saveState);
       document.getElementById('btnGenerate').addEventListener('click', generate);
+      document.getElementById('btnClearText').addEventListener('click', clearTextInput);
       document.getElementById('btnSample').addEventListener('click', () => {
         document.getElementById('textInput').value = SAMPLE;
         generate();
