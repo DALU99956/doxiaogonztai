@@ -5232,7 +5232,8 @@
           return;
         }
         applyNewCards(expandCardsTo(parseShots(text), maxCards));
-        showToast('📐 本地规则解析 · ' + cards.length + ' 张卡');
+        showToast('📐 本地规则解析 · ' + cards.length + ' 张卡' +
+          (maxCards > 0 && cards.length < maxCards ? '（文案数据点只够 ' + cards.length + ' 张）' : ''));
       } catch (e) {
         // 兜底：AI 任何异常都不影响出卡。
         // 注意：降级路径同样必须尊重用户填写的张数（此前直接 applyNewCards(parseShots(text))，
