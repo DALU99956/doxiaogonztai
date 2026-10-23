@@ -3619,6 +3619,15 @@
       if (c.left && c.right) return [String(Math.abs(Number(c.left.value))), String(Math.abs(Number(c.right.value)))];
       return [];
     }
+    // 补位池里的标题常是"价一整个假期卡在""到"这类断句碎片（本地标签提取的已知弱点），
+    // 这种卡补进去只会添乱——只在标题像正常指标/主体名时才允许补位
+    function cleanPoolLabel(label) {
+      const s = String(label || '').trim();
+      if (s.length < 2 || s.length > 10) return false;
+      if (/(的|了|在|到|把|被|是|和|与|就|也|还|又)$/.test(s)) return false;
+      if (/(一整个|愣是|反而|说白了|难看了|琢磨)/.test(s)) return false;
+      return true;
+    }
     function fillUpWithLocal(aiCards, localCards, want) {
       const target = Math.floor(Number(want) || 0);
       const out = aiCards.slice();
@@ -3627,6 +3636,7 @@
       aiCards.forEach(c => numsOfCard(c).forEach(v => seen.add(v)));
       for (const c of localCards) {
         if (out.length >= target) break;
+        if (!cleanPoolLabel(c.label || c.title)) continue;
         const ns = numsOfCard(c);
         // 数值已被 AI 卡覆盖 → 同一数据点，跳过
         if (ns.length && ns.every(v => seen.has(v))) continue;
@@ -5122,7 +5132,11 @@
       if (ti && (type === 'kpi' || type === 'gauge')) card.label = ti;
       if (type === 'kpi' || type === 'gauge') {
         const k = normalizeKpi(it.kpi, script);
-        if (k) {
+        // 数字必须出现在"这张卡自己的文本"里，不能只出现在全篇原文里：
+        // 否则模型会把别处的数字错绑到这句上（实测"金沙摘要、君品习酒也在往下走"被绑上古20的 35 块，
+        // 卡片看着有数、其实张冠李戴）→ 这种直接降级为文字卡，不展示数字
+        const numInCard = k && String(text).indexOf(String(Math.abs(k.num))) >= 0;
+        if (k && numInCard) {
           card.kpi = k;
           // 与 refreshCardDir 用同一上下文，保证"刚生成"和"刷新后"方向一致
           card.dir = crossCheckDir(it.dir, String(card.text || '') + ' ' + String(card.label || '') + ' ' + String(card.title || ''));
@@ -5196,8 +5210,23 @@
       const dataCards = out.filter(c => !isTextOnly(c));
       const finalCards = dataCards.length ? dataCards : out.filter(isTextOnly).slice(0, 1);
       // 用户指定张数时必须凑齐：先拆多数据点图卡；仍不够再用本地规则按数值去重补齐
-      const expanded = expandCardsTo(finalCards, limit);
-      const filled = fillUpWithLocal(expanded, parseShots(text), limit);
+      // 自动模式（张数=0）也要守住信息量下限：免费档 glm-4-flash 经常只吐 5 张，
+      // 500 字文案只剩 5 张卡就是明显丢信息，此时以"本地全量扫描张数 / 按字数估算"为下限
+      const localAll = parseShots(text);
+      // 补齐只允许"带真实数字的数据卡"：金句卡/字幕卡/标签卡、以及无数字的 KPI 一律不进补位，
+      // 否则会补出"金沙摘要也在往下走"这类没数据的卡，或整段照抄原文的金句卡（用户明确反对）
+      const localData = localAll.filter(c => {
+        if (c.type === 'title' || c.type === 'quote' || c.type === 'tags' || c.type === 'signoff') return false;
+        return numsOfCard(c).length > 0;
+      });
+      const chars = String(text).replace(/\s/g, '').length;
+      const autoFloor = Math.max(localData.length, Math.min(20, Math.round(chars / 40)));
+      const target = limit > 0 ? limit : Math.max(finalCards.length, autoFloor);
+      const expanded = expandCardsTo(finalCards, target);
+      // 本地补位池也要先拆开：排行榜/条形图一张里含 2~5 个数据点，
+      // 不拆就只能补 5 张（实测这份文案卡在 5 张就是这个原因）
+      const localPool = expandCardsTo(localData, 50);
+      const filled = fillUpWithLocal(expanded, localPool, target);
       return { cards: filled, model: j.model || 'AI' };
     }
 
