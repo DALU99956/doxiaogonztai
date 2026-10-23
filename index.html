@@ -5120,16 +5120,36 @@
       const type = (typeof it.type === 'string' && TYPE_LABEL[it.type]) ? it.type : inferCardType(it);
       const text = String(it.text || '').trim();
       if (!text) return null;
+      // 硬约束：text 必须逐字来自原文（只忽略空白/标点/引号差异）。
+      // 模型改写、缩写、拼接两句都会在这里被拦掉，防止"AI 自己写文案"。
+      const normCh = s => String(s || '').replace(/[\s，,。.、；;：:！!？?—\-…“”"'‘’（）()《》]/g, '');
+      if (normCh(script).indexOf(normCh(text)) < 0) return null;
       // 复用既有文本→卡片结构（渲染层需要的字段），随后用模型给的高层语义覆盖
       let card;
       try { card = buildCardFromText(text, type) || { type: type, text: text }; } catch (e) { card = { type: type, text: text }; }
-      card.type = type;
+      // 模型有时只给 title+text（不给 kpi/labels/left/right）：此时若硬套成 quote，
+      // 整批卡会被"纯文字卡过滤"丢掉（实测 glm-4-flash 18 段全变 quote、最终只剩 1 张）。
+      // 没有结构化字段时，改由规则读这句原文判定卡型（kpi/bar/rank/gauge…）
+      const hasStruct = !!(it.kpi || it.left || it.right || (Array.isArray(it.labels) && it.labels.length >= 2));
+      if (hasStruct) {
+        card.type = type;
+      } else {
+        let rule = null;
+        try { rule = shotForSentence(text); } catch (e) { rule = null; }
+        if (rule && rule !== '::DROP::' && rule.type) {
+          card = rule;
+          card.text = text;
+        } else {
+          card.type = type;
+        }
+      }
       const ti = String(it.title || '').trim();
       if (ti) card.title = ti;
       // 渲染层（absTrendLayout / renderKPI / renderGauge）顶部标题取的是 card.label，
       // 而 buildCardFromText 在没有指标词时会把 label 兜底成"关键数据"——必须把模型给的真实
       // 标题同步进 label，否则每张 KPI/仪表盘头顶都显示"关键数据"（用户明确反馈的问题）
-      if (ti && (type === 'kpi' || type === 'gauge')) card.label = ti;
+      // 注意用 card.type：模型没给结构化字段时类型由规则判定，原始 type 可能只是 quote
+      if (ti && (card.type === 'kpi' || card.type === 'gauge')) card.label = ti;
       if (type === 'kpi' || type === 'gauge') {
         const k = normalizeKpi(it.kpi, script);
         // 数字必须出现在"这张卡自己的文本"里，不能只出现在全篇原文里：
@@ -5207,7 +5227,10 @@
       // 纯叙述卡（字幕卡/金句卡）没有数据可视化价值、等于照抄原文：
       // 有数据卡时全部丢弃；整篇确实没有数据卡时才保留最多 1 张点题卡
       const isTextOnly = c => c.type === 'title' || c.type === 'quote';
-      const dataCards = out.filter(c => !isTextOnly(c));
+      // 无数字的标签卡（"商务宴请在缩""同一个双节两个世界"）在有数据卡时同样丢弃：
+      // 它们只是换了个样式的原文搬运，用户明确反对卡片泛滥成标签卡
+      const isNoNumTags = c => c.type === 'tags' && numsOfCard(c).length === 0;
+      const dataCards = out.filter(c => !isTextOnly(c) && !isNoNumTags(c));
       const finalCards = dataCards.length ? dataCards : out.filter(isTextOnly).slice(0, 1);
       // 用户指定张数时必须凑齐：先拆多数据点图卡；仍不够再用本地规则按数值去重补齐
       // 自动模式（张数=0）也要守住信息量下限：免费档 glm-4-flash 经常只吐 5 张，
