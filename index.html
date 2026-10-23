@@ -3646,6 +3646,57 @@
       return out;
     }
 
+    // 用户填了具体张数时：必须出够 N 张（数据卡优先，其次本地规则卡，最后才用标签/金句卡补位），
+    // 补齐后按原文出现顺序重排，避免补进来的卡全堆在最后。
+    // 只有"整篇实在没有第 N 个信息点"时才会少于 N，并在提示条里说明上限。
+    function fillToExact(list, pool, want, script) {
+      const target = Math.floor(Number(want) || 0);
+      if (!(target > 0)) return list;
+      const keyOf = c => String(c.text || '').replace(/\s/g, '').slice(0, 24) + '|' + numsOfCard(c).join(',');
+      // 归一后整句，用于判断"是不是同一句原文"（AI 常把一句截短、本地卡带完整句尾，
+      // 只比对前 16 字会漏，这里用包含关系判定）
+      const normAll = c => String(c.text || '').replace(/[\s，,。.！？?；;：:—\-…“”"'‘’（）()]/g, '');
+      const out = [];
+      const seen = new Set();
+      const usedFull = [];
+      // 先把传入的卡自身去重：模型经常把同一句拆成两三张（数值不同、正文一模一样），
+      // 这种重复在"补位"之前就得清掉，否则最终列表里会出现两张完全相同的卡
+      for (const c of list) {
+        const k = keyOf(c);
+        if (seen.has(k)) continue;
+        const full = normAll(c);
+        if (full.length >= 10 && usedFull.some(f => f.includes(full) || full.includes(f))) continue;
+        seen.add(k);
+        if (full.length >= 10) usedFull.push(full);
+        out.push(c);
+      }
+      // allowSameText=false：同一句原文最多出一张卡（避免"飞天批价…"连出 3 张完全一样的）
+      const add = (c, allowSameText) => {
+        if (out.length >= target) return;
+        const k = keyOf(c);
+        if (seen.has(k)) return;
+        const full = normAll(c);
+        if (!allowSameText && full.length >= 10 &&
+          usedFull.some(f => f.includes(full) || full.includes(f))) return;
+        seen.add(k);
+        if (full.length >= 10) usedFull.push(full);
+        out.push(c);
+      };
+      // 第一轮：没被用过的句子里的数据卡
+      pool.filter(c => numsOfCard(c).length > 0).forEach(c => add(c, false));
+      // 第二轮：没被用过的句子里的标签/时间线/对比卡
+      pool.filter(c => c.type === 'tags' || c.type === 'timeline' || c.type === 'vs').forEach(c => add(c, false));
+      // 第三轮：句子用完了，才允许把同一句拆成多张来补数
+      pool.forEach(c => add(c, true));
+      const posOf = c => {
+        const t = String(c.text || '').replace(/[。！？；\s]+$/, '');
+        const i = String(script || '').indexOf(t);
+        return i < 0 ? 1e9 : i;
+      };
+      out.sort((a, b) => posOf(a) - posOf(b));
+      return out.slice(0, target);
+    }
+
     // ================================
     //  渲染与切换
     // ================================
@@ -5243,8 +5294,13 @@
         return numsOfCard(c).length > 0;
       });
       const chars = String(text).replace(/\s/g, '').length;
+      if (limit > 0) {
+        // 用户指定张数：强制出满 N 张（数据卡 → 标签卡 → 文字卡依次补位，按原文顺序重排）
+        const expanded = expandCardsTo(finalCards, limit);
+        return { cards: fillToExact(expanded, localAll, limit, text), model: j.model || 'AI' };
+      }
       const autoFloor = Math.max(localData.length, Math.min(20, Math.round(chars / 40)));
-      const target = limit > 0 ? limit : Math.max(finalCards.length, autoFloor);
+      const target = Math.max(finalCards.length, autoFloor);
       const expanded = expandCardsTo(finalCards, target);
       // 本地补位池也要先拆开：排行榜/条形图一张里含 2~5 个数据点，
       // 不拆就只能补 5 张（实测这份文案卡在 5 张就是这个原因）
@@ -5259,7 +5315,8 @@
       if (!text) return;
       const raw = Number((document.getElementById('aiMaxCards') || {}).value);
       const want = Number.isFinite(raw) ? Math.max(0, Math.min(50, Math.floor(raw))) : 0;
-      applyNewCards(expandCardsTo(parseShots(text), want));
+      const localOnly = parseShots(text);
+      applyNewCards(fillToExact(localOnly, localOnly, want, text));
     }
 
     // 生成：AI 优先；未勾选/未配置/失败/超时 一律自动降级到本地规则解析
@@ -5283,16 +5340,17 @@
             (maxCards > 0 && res.cards.length < maxCards ? '（文案数据点只够 ' + res.cards.length + ' 张）' : ''));
           return;
         }
-        applyNewCards(expandCardsTo(parseShots(text), maxCards));
+        const localOnly = parseShots(text);
+        applyNewCards(fillToExact(localOnly, localOnly, maxCards, text));
         showToast('📐 本地规则解析 · ' + cards.length + ' 张卡' +
-          (maxCards > 0 && cards.length < maxCards ? '（文案数据点只够 ' + cards.length + ' 张）' : ''));
+          (maxCards > 0 && cards.length < maxCards ? '（文案信息点只够 ' + cards.length + ' 张）' : ''));
       } catch (e) {
         // 兜底：AI 任何异常都不影响出卡。
         // 注意：降级路径同样必须尊重用户填写的张数（此前直接 applyNewCards(parseShots(text))，
         // 用户填 9 张也照样按本地默认张数出卡，看起来像"设置没生效"）
         const msg = e && e.message ? e.message : String(e);
         const local = parseShots(text);
-        const picked = expandCardsTo(local, maxCards);
+        const picked = fillToExact(local, local, maxCards, text);
         applyNewCards(picked);
         const less = (maxCards > 0 && picked.length < maxCards) ? '（本地规则最多拆出 ' + picked.length + ' 张）' : '';
         showToast('⚠ AI 不可用：' + msg + ' · 已用本地规则出 ' + picked.length + ' 张' + less, 8000);
