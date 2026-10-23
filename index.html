@@ -732,6 +732,20 @@
       display: inline-flex;
     }
 
+    /* 手机预览模式（?preview=1）：只读、铺满屏幕、不写本地数据、不提供导出 */
+    .preview-mode .exit-fullscreen,
+    .preview-mode .play-dock {
+      display: none !important;
+    }
+    .preview-mode .main {
+      height: 100vh;
+      height: 100dvh; /* 移动端地址栏会吃掉 vh，用 dvh 保证满屏不裁切 */
+    }
+    .preview-mode .phone {
+      height: min(86vh, 152vw);
+      height: min(94dvh, 152vw);
+    }
+
     /* 比例切换（9:16 / 16:9） */
     .ratio-switch {
       display: flex;
@@ -844,6 +858,18 @@
             <button class="btn btn-ghost btn-sm" id="btnSample">示例</button>
           </div>
           <button class="btn btn-ghost" id="btnShots" style="width:100%;margin-top:6px;">🎬 智能拆解为镜头</button>
+          <div class="row" style="margin-top:8px;align-items:center;gap:12px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);cursor:pointer;">
+              <input type="checkbox" id="aiToggle" checked style="width:auto;"> 🤖 AI 解析
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sub);">
+              张数
+              <input type="number" id="aiMaxCards" value="0" min="0" max="50" inputmode="numeric"
+                     title="0 = 自动按文案内容匹配张数；填正数则按你指定的张数出卡"
+                     style="width:58px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:3px 5px;">
+              <em style="font-style:normal;opacity:.7;">（0=自动）</em>
+            </label>
+          </div>
         </div>
 
         <div>
@@ -867,6 +893,7 @@
               <button class="rs-btn active" data-r="9:16" title="竖屏 1080×1920">📱 9:16</button>
               <button class="rs-btn" data-r="16:9" title="横屏 1920×1080">🖥️ 16:9</button>
             </div>
+            <button class="btn btn-sm" id="mobilePreviewBtn" title="显示局域网地址，手机连同一 Wi-Fi 打开即可实时预览">📲 手机预览</button>
             <button class="btn btn-sm" id="fullscreenBtn">⛶ 全屏</button>
           </div>
           <div class="preview-stage">
@@ -932,14 +959,43 @@
             <button class="btn btn-sm btn-ghost" id="exportGreenBtn" title="键控底动效素材：无背景无面板的裸动效浮在纯绿/品红底上。剪映中拖入画中画轨道叠于口播视频上方，色度抠图取底色即抠除，动效浮在人物画面上不遮挡" style="width:100%;margin-top:6px;">🟢 导出绿幕动效视频(MP4)</button>
           </div>
         </div>
+
+        <div class="edit-card">
+          <div class="section-title" style="margin-bottom:8px;">🎬 导入视频 · 直接出片（免剪映）</div>
+          <input type="file" id="compVideoFile" accept="video/mp4,video/quicktime,video/*" style="display:none">
+          <button class="btn btn-sm btn-ghost" id="compPickBtn" style="width:100%;">📁 选择口播视频…</button>
+          <div id="compInfo" style="font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6;">尚未选择视频</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin-top:8px;">
+            卡片起始秒
+            <input type="number" id="compStart" value="0" min="0" step="0.5" style="width:76px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 6px;">
+          </label>
+          <button class="btn btn-sm btn-ghost" id="compRunBtn" style="width:100%;margin-top:8px;" disabled>🎬 生成叠加并合成成片</button>
+          <div style="font-size:11px;color:var(--sub);margin-top:6px;line-height:1.7;">叠加素材按当前画幅（9:16→1080×1920 / 16:9→1920×1080）渲染，长度与口播一致，卡片依次铺开后自动截断；口播音轨原样保留。</div>
+        </div>
       </div>
     </div>
   </div>
 
   <button class="exit-fullscreen" id="exitFullscreenBtn">✕ 退出全屏</button>
+
+  <!-- 手机实时预览：局域网地址提示（同一 Wi-Fi 打开即可，只读预览） -->
+  <div id="mobileModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:10000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px;max-width:min(94vw,470px);text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.5);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px;">📲 手机实时预览</div>
+      <div style="font-size:12px;color:var(--sub);line-height:1.7;margin-bottom:12px;">手机连同一个 Wi-Fi，用浏览器打开下面的地址（电脑端改动会实时同步）：</div>
+      <div id="mobileUrls" style="font-size:17px;font-weight:700;color:var(--accent);word-break:break-all;line-height:1.9;">读取中…</div>
+      <div style="font-size:11px;color:var(--sub);margin-top:10px;line-height:1.8;">首次使用需以管理员身份运行一次 allow_firewall_8123.bat 放行端口。<br>手机端为只读预览：不写本地数据、不提供导出（导出仍在电脑端）。</div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-sm btn-primary" id="mobileCopyBtn" style="flex:1;">📋 复制地址</button>
+        <button class="btn btn-sm btn-ghost" id="mobileCloseBtn" style="flex:1;">关闭</button>
+      </div>
+    </div>
+  </div>
   <div id="exportToast" style="position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:rgba(15,20,30,0.94);color:#fff;padding:10px 18px;border-radius:10px;font-size:14px;z-index:9999;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;max-width:82vw;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);"></div>
 
   <script>
+    // 手机预览模式：手机经局域网打开 ?preview=1 时进入，只读、数据由 server 中转
+    const previewMode = new URLSearchParams(location.search).get('preview') === '1';
     // ================================
     //  主题配置
     // ================================
@@ -1026,32 +1082,198 @@
     // ================================
     const SAVE_KEY = 'financeMotionCards.v1';
     let restoredRatio = '9:16';
+    // 手机预览端（?preview=1）为只读：不写 localStorage、也不反向推送，避免两端互相覆盖
+    let statePushTimer = 0;
+    // 电脑端每次改动把状态推给 server，再由 SSE 广播给手机端（localStorage 跨设备不互通，必须走服务端）
+    function pushStateToServer(payload) {
+      if (previewMode) return;
+      clearTimeout(statePushTimer);
+      statePushTimer = setTimeout(() => {
+        fetch('/api/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).catch(() => {});
+      }, 250);
+    }
     function saveState() {
       try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify({
+        const payload = {
           cards: cards,
           activeIndex: activeIndex,
           currentTheme: currentTheme,
           ratio: ratio,
           autoPlay: autoPlay,
-          text: document.getElementById('textInput').value
-        }));
+          text: document.getElementById('textInput').value,
+          // 张数设置必须跟着存档走，否则刷新/重开后回到 0=自动，用户填的 9 张会被无声丢弃
+          maxCards: Math.max(0, Math.min(50, Math.floor(Number((document.getElementById('aiMaxCards') || {}).value) || 0)))
+        };
+        if (!previewMode) localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+        pushStateToServer(payload);
       } catch (e) {}
     }
+    // 恢复旧卡时按当前文案重算方向：早期存档里可能存着修复前的错误 dir（"基本持平"被误判成下跌），
+    // 原样读回会让刷新后界面永远显示旧符号——统一重算，保证"持平无符号"对已存卡也生效
+    // 同时补回标题：旧存档可能把 kpi/gauge 标题存成默认回退值"关键数据"（如"分红"没被提取），刷新时用正文重提取真实指标
+    function refreshCardDir(card) {
+      if (!card || typeof card !== 'object') return card;
+      const t = String(card.text || '') + ' ' + String(card.label || '') + ' ' + String(card.title || '');
+      if (card.type === 'kpi' || card.type === 'gauge') {
+        const k = card.kpi;
+        card.dir = (k && Number(k.num) < 0) ? 'down' : trendDir(t);
+        let low = String(card.label || '');
+        // 旧存档卡片若已有真实标题（如 AI 给的"双节销量"），直接用它作顶部标题：
+        // 原先 label 被兜底成"关键数据"，而正文里未必含有指标词（"反而少卖了10%"里没有"销量"），
+        // 导致下面按词库重提取失败、刷新后头顶仍显示"关键数据"（用户明确反馈）
+        if (low === '关键数据' && String(card.title || '').trim()) {
+          card.label = String(card.title).trim();
+          low = card.label;
+        }
+        // "现金流10股"这类"指标词+数字+股"拼接是早期解析把分红方案("10股派13块3")拼进标题的残留，
+        // 刷新时重提取真实指标词；"股息率/每股派息"等完整指标词无数字，不受影响
+        if (low === '关键数据' || (low.length >= 2 && /(降了|砍|缩|跌|同比|环比|四分之|这个数|那个数|还在|又|反而|\d+股)/.test(low))) {
+          const full = String(card.text || '');
+          // 按文本位置取最靠前的指标词（"现金流…48亿…10股派13块3"→"现金流"在句首，优先于靠后的"分红"），
+          // 避免"分红"这类靠后词把标题抢成"分红"、又让 linkedKpi 抓到"10股"分红方案
+          let nw = '', nwI = -1;
+          for (const w of FIN_METRICS) {
+            const wi = full.indexOf(w);
+            if (wi >= 0 && (nwI < 0 || wi < nwI)) { nwI = wi; nw = w; }
+          }
+          if (nw) card.label = prependTime(nw, full);
+        }
+        // 旧存档 KPI title 与 label 同源，若也残留"现金流10股"这类拼接（早期解析把分红方案拼进标题），
+        // 一并纠正为干净 label，避免编辑面板/导出仍显示垃圾标题（渲染层用 layout.title 不受影响）
+        if (!card.userTitle && String(card.title || '').length >= 2 && /\d+股/.test(String(card.title))) {
+          card.title = card.label;
+        }
+        // 主数字跟指标词（旧存档）：多指标/多涨跌句里旧卡可能抓错主数字（"收入涨6%利润掉5%"错显-6%）。
+        // 用指标词重取紧邻涨跌数字，仅当文本确实存在该指标时才替换，正常单指标单数字卡不受影响
+        const full2 = String(card.text || '');
+        if (full2 && k && k.text) {
+          const lk2 = linkedKpi(full2, String(card.label || ''), k);
+          if (lk2 && lk2.num != null && String(lk2.text) !== String(k.text)) {
+            card.kpi = { text: lk2.text, num: lk2.num, unit: lk2.unit };
+            // 主数字是绝对数（非%涨跌值）时方向由整句趋势决定："现金流…48亿，涨了24.35%"→up，
+            // 不采用 linkedKpi 对绝对数紧邻词的 flat 判定（48 前是"上半年"无涨跌词），否则趋势主字体丢 + 号
+            if (/%|％|个百分点/.test(String(lk2.unit || ''))) card.dir = lk2.dir || card.dir;
+            else card.dir = Number(lk2.num) < 0 ? 'down' : trendDir(t);
+          }
+        }
+      } else {
+        // 数值序列类（bar/line/rank/timeline/vs）方向由渲染层各自从数据/标签重算，清掉残留 dir 避免取到旧值
+        delete card.dir;
+        // 旧存档 bar/line 标签纠正：早期解析会把连接词/趋势词当标签（"但另一面/收入涨"），
+        // 且数据可能不完整（"收入涨6%利润掉5%"旧卡只有[6]）。标签含连接词/趋势词/数字即视为垃圾，
+        // 按文案整体重解析补全 nums/labels/dirs，让旧卡刷新即显示完整两行（收入+6%/利润-5%）；
+        // 用户手动填的干净标签（甲/乙）不含这些词，不受影响
+        const JUNK_LABEL = /(但|另一面|而且|但是|反而|却|涨|跌|增|降|升|回落|下滑|增长|上涨|上升|收窄|缩水|\d)/;
+        // 触发整体重解析：标签含垃圾，或标题是裸指标词且与某行标签重复（需去重）。
+        // 任一命中即按文案重解析补全，让旧卡刷新即恢复完整/干净
+        const junkBar = (card.type === 'bar' || card.type === 'line') && !card.userTitle &&
+          Array.isArray(card.labels) && Array.isArray(card.nums) && String(card.text || '').length >= 6 &&
+          ((card.labels.length && card.labels.some(l => JUNK_LABEL.test(String(l || '')))) ||
+            ((card.type === 'bar') && card.labels.some(l => {
+              const tl = String(card.title || '');
+              return tl && String(l || '') === tl;
+            })));
+        if (junkBar) {
+          const rebuilt = shotForSentence(String(card.text || ''));
+          if (rebuilt && rebuilt !== '::DROP::' && (rebuilt.type === 'bar' || rebuilt.type === 'line') &&
+            Array.isArray(rebuilt.nums) && !rebuilt.userTitle && rebuilt.nums.length >= (card.nums || []).length) {
+            card.nums = rebuilt.nums;
+            card.labels = rebuilt.labels;
+            card.dirs = rebuilt.dirs;
+            card.unit = rebuilt.unit;
+            card.title = rebuilt.title;
+          }
+        }
+        // line/bar 旧卡若 labels 干净但缺 dirs（或长度不符），从文案重算补上，保证发光面积图/条形图刷新即显示涨跌符号与颜色
+        if (!junkBar && (card.type === 'line' || card.type === 'bar') && Array.isArray(card.nums) && card.nums.length &&
+          (!Array.isArray(card.dirs) || card.dirs.length !== card.nums.length)) {
+          card.dirs = dirsFromText(String(card.text || ''), card.nums);
+        }
+        // 旧存档标题若是"裸指标词"（如"利润"）或含连接词/趋势词/数字（如"但另一面收入"）是早期解析遗留；
+        // 刷新时重算为 refineTitle(text)，让"迈瑞半年报收入涨6%利润跌5%"这类卡刷新即显示"半年报收入"，
+        // 不必手动重生成。仅当 text 存在且原 title 可疑时才纠正，绝不覆盖用户手写的长标题
+        const T0 = String(card.title || '');
+        const JUNK_TITLE = /(但|另一面|而且|但是|反而|却|涨|跌|增|降|升|回落|下滑|增长|上涨|上升|收窄|缩水|\d)/;
+        if (T0 && !card.userTitle && String(card.text || '').length >= 6 &&
+          (FIN_METRICS.includes(T0) || JUNK_TITLE.test(T0))) {
+          const rt = refineTitle(String(card.text || ''), card.type);
+          if (rt && rt !== T0) card.title = rt;
+        }
+        // 双指标条形卡标题去重（含旧存档）：标题是裸指标且与某行标签相同时升格为"涨跌分化/指标对比"
+        if (card.type === 'bar' && Array.isArray(card.labels)) assignBarTitle(card);
+        // 条形卡语义标签（含旧存档）：文案含 % 的两数卡（"占53%，还涨了13.67%"），
+        // 只要旧标签不是真实指标词，就刷新为"占比/涨幅"，让手动切成条形或早期解析的旧卡刷新即纠正，
+        // 不再残留"听着像利好/拆开算不是海"这类口播标签
+        if (!card.userTitle && card.type === 'bar' && String(card.text || '').indexOf('%') >= 0) {
+          const tk = extractNumbers(String(card.text || '')).filter(n => /%|％|百分点/.test(String(n.unit || '') || String(n.text || '')));
+          const tkDir = tk.slice(0, 2).map(n2 => barPointNum(String(card.text || ''), n2));
+          // semBarLabels 内部已保护：旧标签是真实指标词（收入/利润…）时不覆盖；此处直接采纳即可
+          const tkLabels = semBarLabels(String(card.text || ''), tkDir, card.labels);
+          if (Array.isArray(tkLabels) && tkLabels.length === 2) card.labels = tkLabels;
+        }
+      }
+      return card;
+    }
+    // 旧的"纯文字卡"（字幕卡/金句卡）等于照抄口播原文，没有数据可视化价值；
+    // 有数据卡时一律剔除，避免刷新后仍看到一堆复制粘贴的文字卡（用户反复反馈）
+    function pruneTextOnly(list) {
+      if (!Array.isArray(list) || !list.length) return list;
+      const isText = c => c && (c.type === 'title' || c.type === 'quote');
+      const data = list.filter(c => !isText(c));
+      if (!data.length) return list.slice(0, 1);
+      return data;
+    }
+
     function tryRestore() {
       try {
         const raw = localStorage.getItem(SAVE_KEY);
         if (!raw) return false;
         const s = JSON.parse(raw);
         if (!Array.isArray(s.cards) || !s.cards.length) return false;
-        cards = s.cards;
+        cards = pruneTextOnly(s.cards.map(refreshCardDir));
         activeIndex = Math.min(Math.max(0, s.activeIndex || 0), cards.length - 1);
         currentTheme = THEMES[s.currentTheme] ? s.currentTheme : 'neonNight';
         restoredRatio = s.ratio === '16:9' ? '16:9' : '9:16';
         autoPlay = !!s.autoPlay; // 恢复用户勾选的自动轮播（默认 false）
         document.getElementById('textInput').value = typeof s.text === 'string' ? s.text : '';
+        // 恢复上次填写的张数（0=自动）
+        const mc = document.getElementById('aiMaxCards');
+        if (mc && Number.isFinite(Number(s.maxCards))) {
+          mc.value = String(Math.max(0, Math.min(50, Math.floor(Number(s.maxCards) || 0))));
+        }
         return true;
       } catch (e) { return false; }
+    }
+
+    // ================================
+    //  手机预览：状态中转（只读端）
+    //  卡片带自身 theme，连 currentTheme 一起同步；比例必须同源，否则画面变形
+    // ================================
+    function applyRemoteState(st) {
+      if (!st || !Array.isArray(st.cards) || !st.cards.length) return;
+      cards = pruneTextOnly(st.cards.map(refreshCardDir));
+      activeIndex = Math.min(Math.max(0, Number(st.activeIndex) || 0), Math.max(0, cards.length - 1));
+      if (st.currentTheme && THEMES[st.currentTheme]) currentTheme = st.currentTheme;
+      if (st.ratio && st.ratio !== ratio) setRatio(st.ratio);
+      const ti = document.getElementById('textInput');
+      if (ti && typeof st.text === 'string') ti.value = st.text;
+      renderList();
+      showCard(activeIndex);
+    }
+
+    // SSE 长连接：电脑端每次改动即推即刷新（EventSource 断线会自动重连）
+    function connectPreviewStream() {
+      try {
+        const es = new EventSource('/api/state/stream');
+        es.onmessage = ev => {
+          try { applyRemoteState(JSON.parse(ev.data).state); } catch (e) {}
+        };
+        es.onerror = () => {};
+      } catch (e) {}
     }
 
     // ================================
@@ -1074,6 +1296,42 @@
       }
       flush();
       return lines.length ? lines : [raw];
+    }
+
+    // 字幕文本分段着色：把"紧邻涨/跌方向词"的数字（含 %/单位）染成方向色（跌绿/涨红），其余保持主色
+    // 供底部字幕/口播卡共用，语义与 barPointNum 一致——找数字前 8 字内的涨跌词决定该段颜色
+    function captionSegsLine(line, fill, upColor, downColor) {
+      const re = /(\d+(?:\.\d+)?)(\s*[%％]?)/g;
+      const segs = [];
+      let last = 0, m;
+      while ((m = re.exec(line)) !== null) {
+        if (m.index > last) segs.push({ text: line.slice(last, m.index), fill });
+        const numRaw = m[1] + m[2];
+        const pre = line.slice(Math.max(0, m.index - 8), m.index);
+        let c = fill;
+        if (/(跌|降|减|负|亏|砍|缩水|缩|回落|下滑|下探|蒸发|腰斩|掉|少了|亏了|收窄)/.test(pre)) c = downColor;
+        else if (/(涨|增|升|攀升|增长|上涨|上升|多|赚|攀升)/.test(pre)) c = upColor;
+        segs.push({ text: numRaw, fill: c });
+        last = m.index + numRaw.length;
+      }
+      if (last < line.length) segs.push({ text: line.slice(last), fill });
+      if (!segs.length) segs.push({ text: line, fill });
+      return segs;
+    }
+    // 渲染字幕多行：每行一个 <text>，内含按方向分段着色（涨红跌绿）的 tspan，保留 rise2 逐行入场
+    function renderCaptionLines(linesArr, o) {
+      const maxL = o.maxLines || 99;
+      const L = linesArr.slice(0, maxL);
+      if (linesArr.length > maxL) { L[L.length - 1] = L[L.length - 1].replace(/[，。！？、；：]$/, '') + '…'; }
+      const lh = Math.round(o.size * (o.lh || 1.25));
+      const delay = o.delay != null ? o.delay : 0;
+      const upColor = o.upColor, downColor = o.downColor, base = o.fill;
+      return L.map((ln, i) => {
+        const segs = captionSegsLine(ln, base, upColor, downColor);
+        const span = segs.map(s => `<tspan fill="${s.fill}">${esc(s.text)}</tspan>`).join('');
+        const style = o.stagger === false ? '' : ` style="animation-delay:${(delay + i * 0.08).toFixed(2)}s"`;
+        return `<text x="${o.x}" y="${Math.round(o.y + i * lh)}" text-anchor="${o.anchor || 'middle'}" font-size="${o.size}" class="${o.cls || ''}"${style}>${span}</text>`;
+      }).join('');
     }
 
     function renderLines(linesArr, o) {
@@ -1121,6 +1379,38 @@
       return out;
     }
 
+    // 绝对数值卡底部字幕只显示涨跌趋势子句（"涨了27.3%"/"同比涨了203%"），不再整句照搬
+    function trendCaptionOf(s) {
+      const clauses = String(s || '').split(/[，,。；;！!？?：:]/).map(c => c.trim()).filter(Boolean);
+      const trendRe = /(同比|环比|涨|跌|增|降|升|下滑|上升|下降|增长|回落|收窄|走强|走弱|回升|反弹|翻|扩|缩|上修|下修|净流入|净流出|减少|增加|扭亏|转亏)/;
+      const pct = clauses.filter(c => /%|％/.test(c) && trendRe.test(c));
+      if (pct.length) return pct[0];
+      const w = clauses.filter(c => /(同比|环比|涨了|跌了|增了|降了|增长|下降|上涨|下跌|下滑|上升|回落|收窄|走强|走弱|回升|反弹|翻倍|翻番|上修|下修|净流入|净流出|扭亏|转亏)/.test(c));
+      if (w.length) return w[0];
+      return '';
+    }
+
+    // 绝对数值+涨跌幅布局：标题=指标+绝对数（"收入4.04亿美元"），主字体=涨跌短语（"涨了27.3%"）
+    // 仅当主数字是绝对数（非%涨跌值）且句内含趋势子句时启用；百分比卡/无趋势句保持原布局
+    function absTrendLayout(card) {
+      const c = card || {};
+      const k = c.kpi;
+      if (!k) return { title: c.label || '', main: '' };
+      const u = unitOfCard(c, k.num);
+      if (/%|％|个百分点/.test(u)) return { title: c.label || '', main: '' };
+      // 负值绝对数保留 − 号展示（"净利润同比大幅下滑到负3.2亿"→主字体 −3.2亿），不走趋势短语布局
+      if (Number(k.num) < 0) return { title: c.label || '', main: '' };
+      const tc = trendCaptionOf(c.text || '');
+      if (!tc) return { title: c.label || '', main: '' };
+      const absTxt = k.text || (String(k.num) + u);
+      // 趋势子句若包含主数字本身（整句被当趋势短语），说明不是独立趋势短语，不启用
+      if (tc.includes(absTxt)) return { title: c.label || '', main: '' };
+      // 主字体放的是"趋势短语"（如"涨了27.3%"），必须是短句。整句当主字体时会横穿圆环、
+      // 与表盘重叠（用户反馈的"乱"）→ 超过 14 字一律退回普通数字主字体
+      if (tc.length > 14) return { title: c.label || '', main: '' };
+      return { title: (c.label || '') + absTxt, main: tc };
+    }
+
     function bottomCaption(card, o) {
       o = o || {};
       const t = themeForCard(card);
@@ -1142,23 +1432,107 @@
       const bh = Math.round((Math.min(lines.length, 5) - 1) * lh + size * 1.28 + padY * 2);
       const bx = 540 - Math.round(bw / 2), by = captionPlateTop(card, o);
       const plate = `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="26" fill="${t.light ? 'rgba(255,255,255,0.78)' : 'rgba(5,8,16,0.46)'}" stroke="${t.light ? 'rgba(11,21,38,0.12)' : 'rgba(255,255,255,0.12)'}" stroke-width="2"/>`;
-      return `<g class="fade" style="animation-delay:${delay.toFixed(2)}s">${plate}</g>` + renderLines(lines, { x: 540, y: y0, size,
-        fill: o.fill || t.ink, anchor: 'middle', cls: 'rise2', lh: 1.3, maxLines: 5,
-        delay });
+      return `<g class="fade" style="animation-delay:${delay.toFixed(2)}s">${plate}</g>` + renderCaptionLines(lines, {
+        x: 540, y: y0, size, fill: o.fill || t.ink, anchor: 'middle', cls: 'rise2', lh: 1.3, maxLines: 5, delay,
+        upColor: t.light ? '#e0303a' : '#ff4d4f', downColor: t.light ? '#0a9a63' : '#00c48c'
+      });
     }
 
-    // 数字单位：量级词(万亿/亿/万/千/倍) + 计量量词(元/块/台/辆/单/股…) 组合成完整单位。
-    // "500万辆"→"万辆"、"30亿单"→"亿单"、"350块"→"块"，避免把量词丢掉导致大数字缺单位。
-    const NUM_UNIT = '(?:个?(?:万亿|亿|万|千)|倍)?(?:平方米|平米|个百分点|块钱|台|辆|架|艘|套|户|股|单|件|支|吨|平方|万元|元|块|角|米|用户|%|％)?';
+    // ================================
+    //  财经金融 / 投资 / 公司研究 专业词库（集中管理，长词在前）
+    //  新增专业名词只需在下列常量里加词，解析层各函数自动生效，告别逐案打补丁
+    // ================================
+    // 财经指标词（含英文财务缩写）：metricLabelOf/metricLabelsForBar/refineTitle/refineGaugeTopic 共用
+    // 顺序即优先级：长词、复合指标必须排在会被其包含的短词之前（"净资产收益率"先于"收益率"）
+    const FIN_METRICS = [
+      // 财务损益 / 现金流（最具体先匹配）
+      '净资产收益率', '经营性现金流', '经营活动现金流', '自由现金流', '投资活动现金流', '筹资活动现金流',
+      '资产负债率', '拨备覆盖率', '不良贷款率', '扣非净利润', '归母净利润', '净利润率', '产能利用率',
+      '合同负债', '应收账款', '应付账款', '预收款', '资本开支', '在手订单', '新增订单', '出货量', '交付量',
+      '装机量', '装机容量', '保有量', '渗透率', '市占率', '占有率', '客单价', '客单量', '周转率', '杠杆率',
+      '股息率', '分红率', '换手率', '成交额', '成交量', '北向资金', '融资余额', '净利润', '净利率', '净利',
+      '毛利率', '毛利', '净息差', '净利差', '不良率', '营业利润', '利润', '营业成本', '净亏损', '利润率', '收益率',
+      '市盈率', '市净率', '市销率', 'PEG', 'EPS', 'GMV', 'ARPU', 'CAGR', 'PE', 'PB', 'PS', 'ROE', 'ROA', 'IPO',
+      'LPR', 'MLF', 'DR007', 'M2', 'M1', 'CPI', 'PPI', 'PMI', 'GDP', '社融', '新增贷款', '存款余额', '国债收益率', '逆回购', '降准',
+      '市值', '估值', '目标价', '评级', '回购', '增持', '减持', '现金分红', '特别分红', '中期分红', '每股派息', '派现', '分红', '派息', '股价', '涨停', '跌停',
+      '营收', '收入', '销售额', '销量', '产量', '订单', '库存', '存货', '现金流', '融资', '募资', '渠道',
+      '占比', '份额', '规模', '增速', '增长率', '复合增速', '需求', '预期', '价格', '数量', '金额', '成本',
+      '门店', '会员', '用户', '新增用户', 'DAU', 'MAU', '坏账', '商誉', '减值', '计提', '违约', '暴雷', '爆雷',
+      '退市', '停牌', '复牌', '扭亏', '盈利', '亏损', '减亏'
+    ];
+    // 涨跌/持平方向词：trendDir 判定（flat 优先防上下文污染，但强上行词先于 flat，"企稳回升"判涨）
+    const FIN_TREND_DOWN = '走弱|承压|遇冷|疲软|不振|不旺|阴跌|跳水|暴跌|重挫|溃败|滑落|下探|探底|破位|回调|走低|低迷|暴雷|爆雷|失速|放缓|收缩|缩量|缩表|减亏|转亏|转负|下滑|下降|回落|萎缩|亏损|亏了|净亏|净流出|收窄|下修|下调|降温|砍|缩水|蒸发|腰斩|少卖|卖不动|滞销|少了|掉了|减少|净减|负增长|跌|降';
+    const FIN_TREND_UP = '走强|回暖|反弹|回升|攀升|大涨|暴涨|飙升|冲高|新高|创新高|刷新|翻倍|翻番|高增|高增长|双位数|强劲|旺盛|景气|扩容|放量|涨停|走高|上行|提速|改善|向好|上涨|增长|上升|扭亏|盈利|突破|上修|上调|净流入|增厚|修复|补涨|上攻|走阔|涨|增|升|翻';
+    const FIN_TREND_FLAT = '持平|走平|横盘|无变化|保持平稳|总体平稳|基本平稳|平稳|原地踏步|没什么变化|基本没变|大致相当|不相上下|维持|保持不变|窄幅波动|横着|企稳';
+    // 强上行词：优先于 flat 判定（"企稳回升/温和回暖/跌幅收窄中反弹"整体判涨）
+    const FIN_TREND_UP_STRONG = '回暖|回升|反弹|走高|上行|攀升|强劲|大涨|暴涨|飙升|创新高|双位数|翻倍|放量|涨停|高增长|高增';
+    // 变化份额动词（"利润回撤三成/估值上修两成"）：changeShareOf 使用
+    const FIN_CHANGE_VERB = '腰斩|砍掉了?|砍去|回撤|回落|反弹|回升|上修|下调|缩水|蒸发|下滑了?|下跌了?|跌去了?|下降了?|减少了?|掉了?|降了|少了|多了|涨了|增了|增长了?|提高了?|提升了?';
+    // 口播开头（标题剥离）：TITLE_OPENERS 使用
+    const FIN_OPENERS = '大家|各位|你们|咱们|我们|我|家人们|兄弟们|姐妹们|老铁们|铁子们|各位老铁|观众老爷们|告诉你|说实话|说白了|讲真|注意了?|问题来了|有意思的是|咱就说|咱们说|跟你说|我跟你说|不装了|摊牌了|开门见山|直奔主题|直说|讲个真事';
+    // 泛指主语（标题/标签剥离，不含真实公司名，"比亚迪销量"保留主语）：FILLER_SUBJECTS 使用
+    const FIN_FILLER_SUBJECTS = '我|我们|你们|大家|咱们|人家|这家公司|那家公司|这公司|那公司|一家公司|一个公司|整个公司|某公司|公司|企业|这家企业|那家企业|该公司|这家上市公司|那家上市公司|该企业|这家厂|这家龙头|标的|这家|某家';
+    // 时间前缀（指标卡标题 = 时间词 + 指标词，如"今年分红""近三年分红"）：长词/复合词在前，同位置先匹配更具体的词
+    const FIN_TIME_PREFIX = [
+      '(?:19|20)\\d{2}\\s*年', '去年全年', '过去一年', '过去三年', '过去五年', '过去几年', '未来几年',
+      '这几年', '这些年', '那些年', '那几年', '近一年', '近两年', '近三年', '近五年', '近十年',
+      '上半年', '下半年', '第一季度', '第二季度', '第三季度', '第四季度', '一季度', '二季度', '三季度', '四季度',
+      '上季度', '本季度', '上一季度', '这一季度', '本月', '上月', '去年', '今年', '前年', '上年', '明年', '后年',
+      '年度', '全年', '每年', '每季度', '每月', '几年'
+    ];
+    // 折线/面积图趋势判定词：strongTrend 使用
+    const FIN_TREND_STRONG = '趋势|走势|逐月|逐年|月度|季度|同比|环比|逐年攀升|持续走高|一路走高|稳步上升|连续';
+    // 数据点标签动词剥离：extractDataPoints 使用（复合词在前，单字在后）
+    const FIN_VERB_TAIL = '同比增长|环比增长|攀升至|飙升至|回落至|下滑至|上涨至|下降至|减少到|降至|增至|升至|跌至|涨至|冲到|突破|达到|分别为|约为|增长|下降|下滑|回落|减少|砍掉|下跌|上涨|微增|微降|分别|共计|合计|总共|约|为|是|了|涨|跌|降|升|少|亏|赚|退|掉';
+
+    // 数字单位：量级词(万亿/亿/万/千/倍) + 计量量词(元/块/台/辆/单/股/点/手…) 组合成完整单位。
+    // "500万辆"→"万辆"、"30亿单"→"亿单"、"350块"→"块"、"500亿美元"→"亿美元"、"3200点"→"点"
+    const FIN_MAG = '(?:个?(?:万亿|亿|万|千)|倍)';
+    const FIN_MEAS = '(?:美元|美金|港元|港币|人民币元|人民币|欧元|日元|英镑|卢布|分|厘|基点|bp|BP|点|手|股|户|笔|次|人次|张|份|单|GW|GWh|MW|万千瓦|平方米|平米|个百分点|块钱|台|辆|架|艘|套|件|支|吨|平方|万元|元|块|角|米|用户|%|％)';
+    // "个"既可做量级前缀（"4个亿"→亿），也可前置计量量词（"25个基点"→基点、"30个用户"→用户）；统一剥掉，不进入显示单位
+    const NUM_UNIT = '(?:' + FIN_MAG + ')?(?:个?(?:' + FIN_MEAS + '))?';
+    // 伪数值过滤：纯规则剔除"被当数据的非财务数值"，避免"6月→6/第3个→3/立3个预测→3"这类时间、序数、计数
+    // 被错当成 KPI 主数字（对应图1/图3/图4 的根因R1）。用"语境剔除"而非"一律去掉空单位裸数字"，
+    // 保证合法无单位数据仍可用；"25个基点/30个用户/4个亿"这类"个+单位"语义不受影响。
+    function isPseudoNumber(s, mIndex, mText, num, unit) {
+      const digits = String(Math.abs(num));
+      let pos = s.indexOf(digits, mIndex);
+      if (pos < 0) return false;
+      // 数字前邻：跳过负号/空格，查真正前一个字
+      let i = pos - 1;
+      if (i >= 0 && (s[i] === '−' || s[i] === '-' || s[i] === '负')) i--;
+      if (i >= 0 && s[i] === '第') return true; // 序数"第3个"
+      // 数字后紧随内容（跳过已抓的单位 → 看后面的字）
+      let j = pos + digits.length;
+      if (unit) {
+        const uClean = String(unit).replace(/\s+/g, '');
+        const up = s.indexOf(uClean, pos);
+        if (up >= 0) j = up + uClean.length;
+      }
+      const first = s[j] || '';
+      // 时间词："6月/3日/2024年"
+      if (/[月日年时秒]/.test(first)) return true;
+      // 计数"个"+非单位量词（"3个预测/2个兑现"）；"个"+FIN_MEAS（25个基点）保留
+      if (first === '个') {
+        return !new RegExp('^个\\s*(?:' + FIN_MEAS + ')').test(s.slice(j));
+      }
+      // 泛指计数："每四条/每条/两款/三项"
+      if (/^[条项款名位款]/ .test(first)) return true;
+      return false;
+    }
+
     function extractNumbers(s) {
       const out = [];
-      // 负数支持："-3.2亿 / −20%" 提取为负值；(?<![\d年月日]) 挡住 "2023-2024 / 1月-3月" 这类区间连字符
-      const re = new RegExp('(?<![\\d年月日])[-−]\\s*(\\d+(?:\\.\\d+)?)\\s*(' + NUM_UNIT + ')|(\\d+(?:\\.\\d+)?)\\s*(' + NUM_UNIT + ')', 'g');
+      // 负数支持："-3.2亿 / −20% / 负3.2亿" 提取为负值；(?<![\d年月日]) 挡住 "2023-2024 / 1月-3月" 这类区间连字符
+      const re = new RegExp('(?<![\\d年月日])[-−负]\\s*(\\d+(?:\\.\\d+)?)\\s*(' + NUM_UNIT + ')|(\\d+(?:\\.\\d+)?)\\s*(' + NUM_UNIT + ')', 'g');
       let m;
       while ((m = re.exec(s)) !== null) {
         // 口语"个亿/个万"里的"个"是量词冗余，单位只保留量级（"4个亿"→单位"亿"，不显示"个亿"）
-        if (m[1] != null) out.push({ text: m[0].replace(/\s+/g, ''), num: -parseFloat(m[1]), unit: (m[2] || '').replace(/^个/, '') });
-        else out.push({ text: m[0], num: parseFloat(m[3]), unit: (m[4] || '').replace(/^个/, '') });
+        let n;
+        if (m[1] != null) n = { text: m[0].replace(/\s+/g, ''), num: -parseFloat(m[1]), unit: (m[2] || '').replace(/^个/, '') };
+        else n = { text: m[0], num: parseFloat(m[3]), unit: (m[4] || '').replace(/^个/, '') };
+        if (isPseudoNumber(s, m.index, m[0], n.num, n.unit)) continue;
+        out.push(n);
       }
       return out;
     }
@@ -1167,22 +1541,69 @@
     function measUnitOf(text, numStr) {
       const s = String(text || '');
       const n = String(numStr);
-      const i = s.indexOf(n);
+      let i = s.indexOf(n);
+      if (i < 0) {
+        // 卡内数字可能带符号（-120），原文数字未必带号（"净利120亿"）：退而按纯数字再找一次
+        const abs = n.replace(/^[-−+]/, '');
+        if (abs && abs !== n) i = s.indexOf(abs);
+      }
       if (i < 0) return '';
-      const rest = s.slice(i + n.length);
-      const m = rest.match(/^\s*((?:个?(?:万亿|亿|万|千)|倍)?(?:平方米|平米|个百分点|块钱|台|辆|架|艘|套|户|股|单|件|支|吨|平方|万元|元|块|角|米|用户|%|％)?)/);
+      const len = s.indexOf(n) >= 0 ? n.length : n.replace(/^[-−+]/, '').length;
+      const rest = s.slice(i + len);
+      const m = rest.match(new RegExp('^\\s*(?:个|左右|上下|多|余|出头|出点头)?\\s*(' + NUM_UNIT + ')'));
       return m && m[1] ? m[1].replace(/^个/, '') : '';
+    }
+
+    // 所有卡型统一单位：存的单位→原文含%→按数字从原文捞回量词，保证每张卡都不缺单位
+    function unitOfCard(card, num) {
+      const c = card || {};
+      // 主数字自带的单位（kpi.unit）最优先：收入4.04亿美元 / 经调整净利润6252万美元 携带绝对单位，
+      // 若忽略它而回退到"text 里含%就取 %"会被"涨了27.3%"误导成 %（显示"+4.04%"的荒谬卡）；"613万股"同理
+      if (c.kpi && c.kpi.unit) return c.kpi.unit;
+      const u = c.unit;
+      if (u === '％') return '%';
+      if (u) return u;
+      if (/%|％/.test(c.text || '')) return '%';
+      return measUnitOf(c.text || '', String(num != null ? num : (Array.isArray(c.nums) && c.nums.length ? c.nums[0] : '')));
     }
 
     function pickKpi(nums) {
       if (!nums.length) return null;
-      const order = ['%', '％', '个百分点', '万亿', '亿', '倍', '万', '千', ''];
+      const order = ['%', '％', '个百分点', '万亿', '亿', '倍', '万', '千'];
       for (const u of order) {
         // 复合单位（"万辆/亿元/亿单"）按量级前缀兼容归属，避免落到 nums[0] 错位
         const f = nums.find(n => u ? (n.unit === u || n.unit.indexOf(u) === 0) : n.unit === '');
         if (f) return f;
       }
-      return nums[0] || null;
+      // order 未命中但存在带量词数字（块/元/美元/点/股…）→ 取第一个带单位，绝不落回无单位杂数，杜绝"11块"被"6月"挤掉
+      const wu = nums.find(n => n.unit !== '');
+      return wu || nums[0] || null;
+    }
+
+    // 手动 KPI/gauge 主数字跟指标词：当标题(label)已定位到某指标词时，
+    // 优先取该指标词之后紧邻的涨跌数字作主数字（方向由数字前 8 字内的涨跌词判定），
+    // 避免"收入涨6%利润掉5%"把主数字错抓成收入6%又因整句含"掉"叠成 -6%（应为利润 -5%）
+    function linkedKpi(text, label, fallback) {
+      const s = String(text || '');
+      const lb = String(label || '');
+      let core = '';
+      for (const w of FIN_METRICS) { if (lb.includes(w)) { core = w; break; } }
+      if (!core) return fallback;
+      let idx = 0;
+      while ((idx = s.indexOf(core, idx)) >= 0) {
+        const after = s.slice(idx + core.length, idx + core.length + 18);
+        const nums = extractNumbers(after);
+        if (nums.length) {
+          const n = nums[0];
+          const ni = after.indexOf(n.text);
+          const pre = ni > 0 ? after.slice(Math.max(0, ni - 8), ni) : '';
+          const d = /(跌|降|减|负|亏|砍|缩水|缩|回落|下滑|下探|蒸发|腰斩|掉|少了|亏了|收窄)/.test(pre) ? 'down'
+            : /(涨|增|升|攀升|增长|上涨|上升|多|赚|回暖|回升|反弹)/.test(pre) ? 'up' : 'flat';
+          return Object.assign({}, n, { dir: d });
+        }
+        idx += core.length;
+      }
+      return fallback;
     }
 
     // 中文变化份额提取："利润砍掉了将近七成/少了三成二/砍掉三分之二/涨了三成/腰斩" → { num:%, dir }
@@ -1190,7 +1611,7 @@
     function changeShareOf(s) {
       const C2N = { '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
       const nOf = w => /\d/.test(w) ? parseInt(w, 10) : C2N[w] || 0;
-      const m = String(s || '').match(/(腰斩|砍掉了?|砍去|缩水|蒸发|下滑了?|下跌了?|跌去了?|下降了?|减少了?|掉了?|降了|少了|多了|涨了|增了|增长了?|提高了?|提升了?)(?:近|将近|超过|逾|约)?\s*(一半|[一二两三四五六七八九十\d]成[一二三四五六七八九十\d]?|[一二三四五六七八九十\d]分之[一二三四五六七八九十\d])?/);
+      const m = String(s || '').match(new RegExp('(' + FIN_CHANGE_VERB + ')(?:近|将近|超过|逾|约)?\\s*(一半|[一二两三四五六七八九十\\d]成[一二三四五六七八九十\\d]?|[一二三四五六七八九十\\d]分之[一二三四五六七八九十\\d])?'));
       if (!m) return null;
       let num = 0;
       if (/腰斩/.test(m[1]) || m[2] === '一半') num = 50;
@@ -1208,8 +1629,12 @@
     function trendDir(s) {
       const x = String(s || '');
       if (/扭亏为盈|扭亏增盈|由亏转盈/.test(x)) return 'up';
-      if (/跌|降|下滑|下降|回落|萎缩|亏损|亏了|净亏|砍|缩水|蒸发|腰斩|少了|掉了|减少|净减|负增长|转亏|转负/.test(x)) return 'down';
-      if (/涨|增|升|上涨|增长|上升|翻|盈利|突破/.test(x)) return 'up';
+      // 强上行词优先于 flat："企稳回升/温和回暖/跌幅收窄中反弹"整体判涨，避免 flat 抢走
+      if (new RegExp(FIN_TREND_UP_STRONG).test(x)) return 'up';
+      // 明确"持平/走平/横盘/企稳/平稳"优先判 flat（不加符号），避免"跌声一片"等上下文词污染主指标方向
+      if (new RegExp(FIN_TREND_FLAT).test(x)) return 'flat';
+      if (new RegExp(FIN_TREND_DOWN).test(x)) return 'down';
+      if (new RegExp(FIN_TREND_UP).test(x)) return 'up';
       if (/(?<![\d年月日])[-−]\s*\d/.test(x)) return 'down'; // 裸负数："净利润-3.2亿"（区间连字符被负向断言挡住）
       return 'flat';
     }
@@ -1255,8 +1680,10 @@
           '四': 'Q4' } [x[0]]));
       add((s.match(/\d{1,2}(?=\s*月)/g) || []).map(x => x + '月'));
       add((s.match(/[一二三四五六七八九十](?=\s*线)/g) || []).map(x => x + '线'));
-      const m = s.match(/[\u4e00-\u9fa5A-Za-z]{2,6}(?:[、,，][\u4e00-\u9fa5A-Za-z]{2,6})+/);
-      if (m) add(m[0].split(/[、,，]/).map(x => x.trim()).filter(Boolean));
+      // 列表标签仅在"、"顿号真正枚举时才匹配，避免自然口播句中的"，"被误判成枚举列表
+      // （"…占53%，还涨了13.67%"不该把"听着像利好、拆开算不是海外"当行标签）
+      const m = s.match(/[\u4e00-\u9fa5A-Za-z]{2,6}(?:、[\u4e00-\u9fa5A-Za-z]{2,6})+/);
+      if (m) add(m[0].split(/、/).map(x => x.trim()).filter(Boolean));
       for (let i = found.length; i < n; i++) found.push('第' + (i + 1) + '项');
       return found.slice(0, n).map(l => l.length > 8 ? l.slice(0, 8) + '…' : l);
     }
@@ -1264,10 +1691,10 @@
     function extractDataPoints(s) {
       const pts = [];
       const re = /([\u4e00-\u9fa5A-Za-z]{1,8})\s*(\d+(?:\.\d+)?)\s*(万亿|亿|万|千|倍|%|％|个百分点)?/g;
+      const verbTail = new RegExp('(?:' + FIN_VERB_TAIL + ')$');
       let m;
       while ((m = re.exec(s))) {
-        pts.push({ label: m[1].replace(/^(今年|去年|上半年|下半年|当月|本月|当季|本季|Q[1-4]|其中|同比|环比)/, '').replace(
-            /(达到|约为|约|为|是|分别|共计|合计|总共|了|增长|同比增长|下降|下滑|回落|减少|减少到|砍掉|下跌|上涨|微增|微降|涨|跌|降|升|少|亏|赚|退|掉)$/, ''), num: parseFloat(m[2]), unit: m[3] || '' });
+        pts.push({ label: m[1].replace(/^(今年|去年|上半年|下半年|当月|本月|当季|本季|Q[1-4]|其中|同比|环比)/, '').replace(verbTail, ''), num: parseFloat(m[2]), unit: m[3] || '' });
       }
       return pts;
     }
@@ -1276,25 +1703,97 @@
     // 提取数字旁的真实指标词作为条形标签（营收/利润/销量…）：按标点切句，句内命中指标词表即取该词，
     // 比 extractDataPoints 的去动词剥离更干净——“去年营收跌了33.47%”直接得到“营收”，而非“营收跌”
     function metricLabelsForBar(s, n) {
-      const kws = ['净利润率', '毛利率', '净利润', '净利', '营收', '收入', '利润', '市占率', '市占', '渗透率', '渗透', '增速', '涨幅', '跌幅',
-        '涨跌幅', '占比', '份额', '规模', '销量', '销售额', '产量', '出货量', '保有量', '市值', '股价', '融资', '订单', '毛利', '亏损', '盈利', '用户', '会员', '门店'];
+      const kws = FIN_METRICS;
       const segs = String(s || '').split(/[，。；、,.;:：！？!?]/).map(x => x.trim()).filter(Boolean);
       const out = [];
       for (const seg of segs) {
         if (!/[\d一二两三四五六七八九十]/.test(seg)) continue;
-        let kw = null;
-        for (const k of kws) if (seg.includes(k)) { kw = k; break; }
-        if (kw && out.indexOf(kw) < 0) out.push(kw);
+        // 收集本段所有命中指标词（按位置），重叠词只保留最长的（"营业收入"优先于"收入"），
+        // 使"收入涨6%利润掉5%"这类一逗到底的双指标句能同时提取"收入"和"利润"
+        const hits = [];
+        for (const k of kws) {
+          let p = seg.indexOf(k);
+          while (p >= 0) { hits.push({ k, p }); p = seg.indexOf(k, p + 1); }
+        }
+        hits.sort((a, b) => a.p - b.p || b.k.length - a.k.length);
+        const used = [];
+        for (const h of hits) {
+          const overlap = used.some(u => u.p <= h.p && h.p < u.p + u.k.length);
+          if (!overlap && out.indexOf(h.k) < 0) { out.push(h.k); used.push(h); }
+        }
       }
       return out.slice(0, n);
+    }
+    // 条形图每行方向编码：该数字前 8 字内的跌/涨语义决定正负。
+    // "利润反而跌5%"→-5、"收入涨6%"→+6；无涨跌词保持原值（正）由渲染层相对判定
+    function barPointNum(s, n) {
+      const i = String(s || '').indexOf(n.text);
+      const pre = i > 0 ? String(s).slice(Math.max(0, i - 8), i) : '';
+      // 条形图每行独立方向：前 8 字内的跌/涨语义决定正负与颜色。"利润反而跌5%"→-5/down、"收入涨6%"→+6/up；
+      // 无涨跌词的绝对数值（604 亿/145 亿）方向即 flat，渲染成中性，不被整卡趋势污染也不被误标成涨
+      if (/(跌|降|减|负|亏|砍|缩水|缩|回落|下滑|下探|蒸发|腰斩|掉|少了|亏了|收窄)/.test(pre)) return { ...n, num: -Math.abs(n.num), dir: 'down' };
+      if (/(涨|增|升|攀升|增长|上涨|上升|多|赚|攀升)/.test(pre)) return { ...n, num: Math.abs(n.num), dir: 'up' };
+      return { ...n, num: n.num, dir: 'flat' };
+    }
+    // 从文案重算每点方向（供缺 dirs 的旧存档 line/bar 卡兜底，语义与 barPointNum 一致）
+    function dirsFromText(text, nums) {
+      const s = String(text || '');
+      const out = [];
+      let pos = 0;
+      for (const v of (nums || [])) {
+        const abs = String(Math.abs(Number(v))).replace('.', '\\.');
+        const re = new RegExp(abs, 'g');
+        re.lastIndex = pos;
+        const m = re.exec(s);
+        if (!m) { out.push('flat'); continue; }
+        const i = m.index;
+        pos = i + m[0].length;
+        const pre = s.slice(Math.max(0, i - 8), i);
+        const dir = /(跌|降|减|负|亏|砍|缩水|缩|回落|下滑|下探|蒸发|腰斩|掉|少了|亏了|收窄)/.test(pre) ? 'down'
+          : /(涨|增|升|攀升|增长|上涨|上升|多|赚|攀升)/.test(pre) ? 'up' : 'flat';
+        out.push(dir);
+      }
+      return out;
+    }
+    // 条形图语义标签：按每个数字前紧邻的动词生成"占比/涨幅/降幅"。
+    // "海外收入…占53%，还涨了13.67%" → ["占比","涨幅"]，绝不把口播句或"同比/环比"当行标签。
+    // 仅当(1)数字均为%类且(2)前两个数字都命中语义词且(3)原标签不是真实指标词时替换，避免误伤"收入/利润"。
+    function semBarLabels(text, directed, curLabels) {
+      if (!Array.isArray(directed) || directed.length < 2) return curLabels;
+      const txt = String(text || '');
+      // 只要文案含 % 就尝试语义标签；directed 里的值本身可能是纯数字数组（旧存档 nums），不强依赖其 text
+      const anyPct = /%|％/.test(txt);
+      if (!anyPct) return curLabels;
+      const sem = directed.slice(0, 2).map(n => {
+        const i = txt.indexOf(String(n.text || ''));
+        // 只取数字前紧邻 6 字（精确语义窗，避免把上一段的"占53%"混入"涨了13.67%"的判定）
+        const pre = i > 0 ? txt.slice(Math.max(0, i - 6), i) : '';
+        if (/占|占比|占据|比重|份额/.test(pre)) return '占比';
+        if (/(涨|升|增|攀升|上涨|增长|提升)/.test(pre)) return '涨幅';
+        if (/(跌|降|减|回落|下滑|收窄)/.test(pre)) return '降幅';
+        return null;
+      });
+      if (!sem[0] || !sem[1]) return curLabels;
+      // 原标签若是真实指标词（收入/利润/毛利率…），说明是有效对比，不用语义词覆盖
+      if (Array.isArray(curLabels) && curLabels.some(l => FIN_METRICS.includes(String(l || '')))) return curLabels;
+      return sem;
     }
     function labelsForSeries(seg, unit, n) {
       const mkw = metricLabelsForBar(seg, n);
       if (mkw.length >= n) return mkw.map(l => l.length > 8 ? l.slice(0, 8) + '…' : l);
+      // 指标词不足 n：优先取数据点前的主体实体（"茅台市值2.5万亿，五粮液1万亿"→ 茅台/五粮液），
+      // 剔除纯单位量词（万亿/亿/万…）与动词/虚词/功能词（占/涨/还涨/就/是/达到…），
+      // 杜绝"万亿"或"占/还涨"这类单位词/口播动词被当成条形图行标签的观感打架
+      const pts = extractDataPoints(seg);
+      const nonUnit = pts.map(p => p.label).filter(Boolean)
+        .map(l => l.replace(/(涨|升|增|降|跌|减|翻|占|为|是|达到|升至|上涨|下降|突破|挺进|超过|首次|终于|就|还|又|的|了|才|都|也)$/, ''))
+        .map(l => l.trim())
+        .filter(l => l.length >= 2)
+        .filter(l => !/^(万亿|亿|万|千|兆|元|块|%|％|个百分点|辆|台|单|股|美金|美元|人民币|币|块钱)$/.test(l));
+      if (nonUnit.length >= n) return nonUnit.slice(0, n).map(l => l.length > 8 ? l.slice(0, 8) + '…' : l);
       const fromList = extractLabels(seg, n);
       const isDefault = fromList.every((l, i) => l === ('第' + (i + 1) + '项'));
       if (!isDefault) return fromList;
-      const pts = extractDataPoints(seg);
       const matched = pts.filter(p => p.unit === unit);
       if (matched.length >= n) { const lbs = matched.map(p => p.label).filter(Boolean); if (lbs.length >= n) return lbs.slice(
           0, n); }
@@ -1316,6 +1815,8 @@
       @keyframes pop{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:scale(1)}}
       .floaty{animation:floaty 3.2s ease-in-out infinite}
       @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-26px)}}
+      .floatySm{animation:floatySm 3.4s ease-in-out infinite}
+      @keyframes floatySm{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
       .pulse{animation:pulse 2.6s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
       @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
       .barGrow{animation:barGrow 1.1s cubic-bezier(.2,.8,.2,1) both;transform-origin:center bottom;transform-box:fill-box}
@@ -1367,6 +1868,7 @@
       if (card.type === 'vs') return '⚔️ 对比';
       if (card.type === 'gauge') return '📊 读数';
       if (card.type === 'quote') return '💬 金句';
+      if (card.type === 'signoff') return '🔔 关注';
       if (card.type === 'timeline') return '📅 沿革';
       if (card.type === 'tags') return '🏷️ 要点';
       return '💡 观点';
@@ -1514,19 +2016,73 @@
       out += '</g>';
       return out;
     }
+    // 与 odometer 同口径的数字列宽度（数字 0.72、标点 0.34）
+    function odoW(str, size) {
+      let w = 0;
+      for (const ch of String(str)) w += /[0-9]/.test(ch) ? Math.round(size * 0.72) : Math.round(size * 0.34);
+      return w;
+    }
+    // 趋势主字体：金融规范用 +/- 号（涨 + 红、跌 − 绿），数字滚轮动效，整体约束在圆环内径内不遮挡
+    function trendMainBody(tc, t, color, dir) {
+      const m = /^([^\d.]+)?([\d.]+)(.*)$/.exec(String(tc || ''));
+      const num = (m && m[2]) || '';
+      const suffix = (m && m[3]) || '';
+      if (!num) return '';
+      const sign = dir === 'up' ? '+' : (dir === 'down' ? '−' : '');
+      // 符号 0.6、数字 1.0、后缀 0.9；符号与数字、数字与后缀之间各留间隙，防止 +/％ 与数字粘连遮挡
+      const maxW = 500;
+      const signGap = sign ? 0.16 : 0;
+      const sufGap = suffix ? 0.24 : 0;
+      const coef = (sign ? 0.6 : 0) + signGap + odoW(num, 1) + sufGap + textW(suffix, 1) * 0.9;
+      const size = Math.max(60, Math.min(150, coef > 0 ? Math.floor(maxW / coef) : 150));
+      const by = 860 + Math.round(size * 0.33);
+      const sSize = Math.round(size * 0.9);
+      const signW = sign ? Math.round(size * 0.6) : 0;
+      const sg = Math.round(size * signGap);
+      const nW = odoW(num, size);
+      const fg = Math.round(size * sufGap);
+      const sW = textW(suffix, sSize);
+      const total = signW + sg + nW + fg + sW;
+      let x = 540 - total / 2;
+      let out = '';
+      if (sign) {
+        out += `<text x="${(x + signW / 2).toFixed(1)}" y="${by}" text-anchor="middle" font-size="${size}" font-weight="900" class="numfont" fill="${color}" style="animation:deltaPop .7s cubic-bezier(.2,1.5,.4,1) .5s both">${sign}</text>`;
+        x += signW + sg;
+      }
+      if (num) {
+        out += odometer(num, x + nW / 2, by, size, color);
+        x += nW + fg;
+      }
+      if (suffix) {
+        out += `<text x="${(x + sW / 2).toFixed(1)}" y="${by}" text-anchor="middle" font-size="${sSize}" font-weight="900" class="numfont" fill="${color}">${esc(suffix)}</text>`;
+      }
+      return out;
+    }
 
     function renderKPI(card) {
       const t = themeForCard(card);
       const k = card.kpi;
       if (!k) return renderTitle({ text: card.text || '' });
-      const d = { main: String(k.num), unit: (((k.unit === '％' ? '%' : (k.unit || '')) || ((/%|％/.test(card.text || '')) ? '%' : '')) || measUnitOf(card.text || '', String(k.num))) };
+      const layout = absTrendLayout(card);
+      const d = { main: String(k.num), unit: unitOfCard(card, k.num) };
       const dir = card.dir;
-      const color = dir === 'up' ? t.accent2 : (dir === 'down' ? t.danger : t.accent);
-      const pctTarget = (k.unit === '%' || k.unit === '％' || k.unit === '个百分点') ? Math.max(0, Math.min(k.num, 100)) : 72;
+      // 主数字颜色必须跟随涨跌方向，与同卡的 +/- 号、底部字幕、条形图保持一致：
+      // 涨=红(#ff4d4f)，跌=绿(#00c48c)，持平=主题点缀色。
+      // 原实现用 t.accent2/t.danger（主题色）→ 霓虹暗夜的 accent2 是绿色，
+      // 导致"涨"的卡片主数字显示绿色、"跌"的显示橙红，且与同一张卡的 +/- 号自相矛盾
+      const upColor = t.light ? '#e0303a' : '#ff4d4f';
+      const downColor = t.light ? '#0a9a63' : '#00c48c';
+      const color = dir === 'down' ? downColor : (dir === 'up' ? upColor : t.accent);
+      // 趋势主字体时，环按涨跌幅填充（"涨了27.3%"→27.3%）
+      const pctTarget = layout.main
+        ? Math.max(0, Math.min(100, parseFloat(String(layout.main).replace(/[^\d.]/g, '')) || 0))
+        : ((k.unit === '%' || k.unit === '％' || k.unit === '个百分点') ? Math.max(0, Math.min(k.num, 100)) : 72);
       const ringTo = 1000 - (1000 * pctTarget / 100);
       // ===== 大号加减符号贴在数字前面（财务写法 −3.2亿 / +12.4亿）=====
       // 负号不再交给滚轮渲染（小且无动效），统一由彩色大符号表达，避免双负号
-      const showSym = dir === 'up' || dir === 'down';
+      // 用户明确要求（已反馈三次）：涨跌方向一律用 +/- 号表达，
+      // 不再区分"百分比涨跌值"与"绝对数值"——涨加 +、跌加 −，持平不加
+      const showSym = (dir === 'up' || dir === 'down');
       const absMain = d.main.replace(/^[-−+]/, '');
       const nl = numUnitLayout(absMain, d.unit, showSym ? 370 : 490, 280);
       const size = nl.size;
@@ -1540,16 +2096,21 @@
       const unitX = numCx + nl.numW / 2 + nl.gap + nl.unitW / 2;
       const by = 860 + Math.round(size * 0.33);
       const symFill = dir === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : (t.light ? '#e0303a' : '#ff4d4f');
-      const ring = `<g transform="translate(540 860)"><circle r="290" fill="none" stroke="${t.sub}" stroke-opacity="0.20" stroke-width="46" transform="rotate(-90)"/><circle r="290" fill="none" stroke="url(#acc)" stroke-width="46" stroke-linecap="round" pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" style="--to:${ringTo}" class="ringSweep" transform="rotate(-90)"/></g>`;
+      // 圆环进度同样跟随方向色（涨红跌绿），否则"涨"的卡片仍是绿色环，与主数字打架
+      const ring = `<g transform="translate(540 860)"><circle r="290" fill="none" stroke="${t.sub}" stroke-opacity="0.20" stroke-width="46" transform="rotate(-90)"/><circle r="290" fill="none" stroke="${color}" stroke-width="46" stroke-linecap="round" pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="1000" style="--to:${ringTo}" class="ringSweep" transform="rotate(-90)"/></g>`;
+      // 主字体：有独立趋势子句时主字体=趋势短语（"+27.3%"金融 +/- 规范，数字滚轮动效，约束在圆环内），否则数字滚轮+单位+符号
+      const mainBody = layout.main
+        ? trendMainBody(layout.main, t, color, dir)
+        : `${odometer(absMain, numCx, by, size, color)}` +
+          `${d.unit ? `<text x="${unitX.toFixed(0)}" y="${by - Math.round(size * 0.15)}" text-anchor="middle" font-size="${nl.unitSize}" font-weight="800" class="numfont" fill="${color}">${esc(d.unit)}</text>` : ''}` +
+          `${showSym ? `<g class="${dir === 'up' ? 'arrowNudge' : 'arrowNudgeD'}" style="animation-delay:1.3s"><text x="${(leftX + symW / 2).toFixed(0)}" y="${by - Math.round(size * 0.04)}" text-anchor="middle" font-size="${symSize}" font-weight="900" fill="${symFill}" style="animation:deltaPop .7s cubic-bezier(.2,1.5,.4,1) .5s both">${dir === 'down' ? '−' : '+'}</text></g>` : ''}`;
       const panel = glassPanel(90, 380, 900, 800, 44);
       const inner = `<g class="fade">
         ${panel}
         ${industryBadge(card, t)}
-        <text x="540" y="500" text-anchor="middle" font-size="56" font-weight="800" fill="${t.sub}" letter-spacing="10">${esc(card.label)}</text>
+        <text x="540" y="500" text-anchor="middle" font-size="${fitSize(layout.title, 900, 62, 46)}" font-weight="800" fill="${t.sub}" letter-spacing="10">${esc(layout.title)}</text>
         ${ring}
-        ${odometer(absMain, numCx, by, size, color)}
-        ${d.unit ? `<text x="${unitX.toFixed(0)}" y="${by - Math.round(size * 0.15)}" text-anchor="middle" font-size="${nl.unitSize}" font-weight="800" class="numfont" fill="${t.ink}" fill-opacity="0.92">${esc(d.unit)}</text>` : ''}
-        ${showSym ? `<g class="${dir === 'up' ? 'arrowNudge' : 'arrowNudgeD'}" style="animation-delay:1.3s"><text x="${(leftX + symW / 2).toFixed(0)}" y="${by - Math.round(size * 0.04)}" text-anchor="middle" font-size="${symSize}" font-weight="900" fill="${symFill}" style="animation:deltaPop .7s cubic-bezier(.2,1.5,.4,1) .5s both">${dir === 'down' ? '−' : '+'}</text></g>` : ''}
+        ${mainBody}
         ${bottomCaption(card, { fill: t.ink, delay: 0.3 })}
       </g>`;
       return svgShell(inner, { card });
@@ -1563,15 +2124,27 @@
       const n = nums.length;
       // 渲染层标签校正：陈旧 localStorage 卡里的“第N项/上期/本期/去年/今年”占位标签，按原文重提“营收/利润”真指标词，刷新即生效
       let labels0 = (card.labels || []).slice(0, 6);
-      const unclean = l => /^第\d+项$|^(上期|本期|去年|今年|同期|上年|往年)$|(?:跌了?|掉|砍了?|涨了?|增|降了?|少了|减少|缩水)$/.test(String(l || '').trim());
+      const unclean = l => /^第\d+项$|^(上期|本期|去年|今年|同期|上年|往年)$/.test(String(l || '').trim());
       if (labels0.length && labels0.every(unclean)) {
         const re = labelsForSeries(card.text || '', card.unit || '', n);
         if (re && re.some(x => !unclean(x))) labels0 = re.slice(0, n);
       }
       const d = dirOfCard(card);
-      const rows = nums.map((v, i) => ({ v, label: labels0[i] || '第' + (i + 1) + '项' }))
+      const gLine = d === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : d === 'up' ? (t.light ? '#e0303a' : '#ff4d4f') : t.ink;
+      // 逐条方向：优先信任数据层编码的 dirs（"收入涨→up、利润跌→down、绝对数→flat"），
+      // 旧存档无 dirs 时回退标签/数值符号判定，绝不复用整卡方向（否则"利润跌"会把"收入涨"也压成绿）
+      const barRowDir = (label, v, dir) => {
+        if (dir === 'up' || dir === 'down') return dir;
+        const L = String(label || '');
+        if (/(跌|降|减|负|亏|砍|掉|缩|下滑)/.test(L)) return 'down';
+        if (/(涨|增|升|多|赚|攀升)/.test(L)) return 'up';
+        if (v < 0) return 'down';
+        return 'flat';
+      };
+      const gapcOf = rd => rd === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : rd === 'up' ? (t.light ? '#e0303a' : '#ff4d4f') : t.ink;
+      const rows = nums.map((v, i) => ({ v, label: labels0[i] || '第' + (i + 1) + '项', dir: (card.dirs || [])[i] || undefined }))
         .sort((a, b) => b.v - a.v);
-      const max = rows[0].v * 1.08 || 1;
+      const max = (Math.max(...rows.map(r => Math.abs(r.v))) * 1.08) || 1;
       const trackX = 130, trackW = 820;
       // 财经条卡：块体加高、垂直居中，刻度轴与字幕板自下而上排布，杜绝遮挡
       const topY = 665;
@@ -1597,26 +2170,31 @@
       const capY = Math.round(axisLabelBottom + 40 + cSize * 1.02 + 22 + (cLines.length - 1) * cLh);
       // 数值右对齐 x=950、标签左对齐（无条前涨跌三角）
       const labelX = trackX;
-      const maxLabelW = Math.max(...rows.map(r => textW(String(r.label).slice(0, 8), 44)));
+      const labelFont = 54;
+      const maxLabelW = Math.max(...rows.map(r => textW(String(r.label).slice(0, 8), labelFont)));
       const valMaxW = Math.max(240, 950 - (labelX + maxLabelW) - 24);
-      const valSize = Math.max(36, Math.min(52, fitSize(String(rows[0].v) + (card.unit || ''), valMaxW, 52, 36)));
-      // 涨跌方向色：下跌=绿、增长=红（金融惯例，跌红涨绿的相反约定由主题驱动底色，此处定数值色与正负号）
-      const gapc = d === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : d === 'up' ? (t.light ? '#e0303a' : '#ff4d4f') : t.ink;
-      let out = `<text x=\"540\" y=\"540\" text-anchor=\"middle\" font-size=\"66\" font-weight=\"900\" fill=\"${t.ink}\" class=\"fade\">${esc(card.title || '数据排行')}</text>`;
+      // 数值字号与横杠匹配：条卡数值承载核心涨幅，字号放大避免被粗横杠压住
+      const valFont = Math.max(44, Math.min(66, fitSize(String(rows[0].v) + unitOfCard(card, rows[0].v), valMaxW, 66, 44)));
+      // 涨跌方向色（逐条）：下跌=绿、增长=红，颜色与符号由每条 barRowDir 决定
+      let out = `<text x=\"540\" y=\"540\" text-anchor=\"middle\" font-size=\"${fitSize(card.title || '数据排行', 960, 72, 52)}\" font-weight=\"900\" fill=\"${t.ink}\" class=\"fade\">${esc(card.title || '数据排行')}</text>`;
       out += industryBadge(card, t);
       rows.forEach((r, i) => {
         const y = topY + i * rowH;
         const rd = (i * 0.14).toFixed(2);
         const w = Math.max(14, (Math.abs(r.v) / max) * trackW);
         const isTop = i === 0;
-        // 正负号：下跌前缀'-'、增长前缀'+'、中性不加；数值本身已是负数则不再重复加号
-        const prefix = r.v < 0 ? '' : (d === 'down' ? '-' : d === 'up' ? '+' : '');
+        // 正负号（逐条）：增长'+'、下跌'-'、中性不加；flat 属于绝对数值不显示符号，避免"收入604亿"被误标成 +604
+        const rowDir = barRowDir(r.label, r.v, r.dir);
+        const rowGapc = gapcOf(rowDir);
+        const prefix = rowDir === 'down' ? '-' : rowDir === 'up' ? '+' : '';
+        // 横杠填充跟随每条方向：涨=红、跌=绿（与数值同色）；绝对数值(flat)=维持主题渐变，保持中性
+        const rowFill = (rowDir === 'up' || rowDir === 'down') ? rowGapc : 'url(#barf)';
         out += `<g class=\"raceRow\" style=\"--from:760px;--rd:${rd}s\">
           <g style=\"animation:fade .5s ease ${(0.5 + i * 0.14).toFixed(2)}s both\">
-            <text x=\"${labelX}\" y=\"${y + 44}\" font-size=\"44\" font-weight=\"800\" fill=\"${isTop ? t.accent : t.ink}\">${esc(r.label)}</text></g>
-          <text x=\"950\" y=\"${y + 48}\" text-anchor=\"end\" font-size=\"${valSize}\" font-weight=\"900\" class=\"numfont\" fill=\"${gapc}\" style=\"animation:fade .5s ease ${(0.6 + i * 0.14).toFixed(2)}s both\">${prefix}${Math.abs(r.v)}${esc(card.unit || '')}</text>
+            <text x=\"${labelX}\" y=\"${y + 44}\" font-size=\"${labelFont}\" font-weight=\"800\" fill=\"${isTop ? t.accent : t.ink}\">${esc(r.label)}</text></g>
+          <text x=\"950\" y=\"${y + 48}\" text-anchor=\"end\" font-size=\"${valFont}\" font-weight=\"900\" class=\"numfont\" fill=\"${rowGapc}\" style=\"animation:fade .5s ease ${(0.6 + i * 0.14).toFixed(2)}s both\">${prefix}${Math.abs(r.v)}${esc(unitOfCard(card, r.v))}</text>
           <rect x=\"${trackX}\" y=\"${y + 62}\" width=\"${trackW}\" height=\"${barH}\" rx=\"${Math.round(barH / 2)}\" fill=\"${t.glassFill}\" stroke=\"${t.glassStroke}\" stroke-width=\"2\"/>
-          <rect x=\"${trackX}\" y=\"${y + 62}\" width=\"${w}\" height=\"${barH}\" rx=\"${Math.round(barH / 2)}\" fill=\"url(#barf)\" class=\"raceBar\" style=\"--rd:${rd}s;--w:${Math.round(w)}px\"/>
+          <rect x=\"${trackX}\" y=\"${y + 62}\" width=\"${w}\" height=\"${barH}\" rx=\"${Math.round(barH / 2)}\" fill=\"${rowFill}\" class=\"raceBar\" style=\"--rd:${rd}s;--w:${Math.round(w)}px\"/>
         </g>`;
       });
       out += pctAxis;
@@ -1645,8 +2223,24 @@
       const area = path + ` L ${pts[n-1].x} ${baseY} L ${pts[0].x} ${baseY} Z`;
       // 数值标签居中于各点：按相邻点间距自适应字号，避免近平直线时数值横向重叠
       const spacing = (endX - startX) / (n - 1);
-      const longestVal = nums.map(v => String(v) + (card.unit || '')).reduce((a, b) => a.length >= b.length ? a : b);
-      const valSize = Math.max(30, Math.min(42, fitSize(longestVal, Math.max(90, spacing - 20), 42, 30)));
+      // 每点显示值：涨跌语义（dirs）决定符号——down→'-'+绝对值（跌）、up且单位为%→'+'（涨）、flat/绝对数→原样；据此也决定该点颜色
+      // 缺 dirs 的旧存档用 dirsFromText 从文案重算，保证刷新即带符号
+      const pctUnit = /%|％|个百分点/.test(unitOfCard(card, nums[0]));
+      const dirs = (card.dirs && card.dirs.length === nums.length) ? card.dirs : dirsFromText(card.text, nums);
+      const lineDisp = nums.map((v, i) => {
+        const d = dirs[i];
+        if (d === 'down') return '-' + Math.abs(v) + unitOfCard(card, v);
+        if (d === 'up' && pctUnit) return '+' + Math.abs(v) + unitOfCard(card, v);
+        return v + unitOfCard(card, v);
+      });
+      const lineColor = nums.map((v, i) => {
+        const d = dirs[i];
+        if (d === 'down') return t.light ? '#0a9a63' : '#00c48c';
+        if (d === 'up' && pctUnit) return t.light ? '#e0303a' : '#ff4d4f';
+        return '';
+      });
+      const longestVal = lineDisp.reduce((a, b) => a.length >= b.length ? a : b);
+      const valSize = Math.max(26, Math.min(42, fitSize(longestVal, Math.max(90, spacing - 20), 42, 26)));
       const longestLab = labels.map(l => String(l)).reduce((a, b) => a.length >= b.length ? a : b, '');
       const labSize = Math.max(28, Math.min(38, fitSize(longestLab, Math.max(80, spacing - 16), 38, 28)));
       let dots = '',
@@ -1654,15 +2248,16 @@
         labs = '';
       pts.forEach((p, i) => {
         const last = i === n - 1;
+        const vc = lineColor[i] || (last ? t.accent2 : t.ink);
         dots +=
           `<circle cx="${p.x}" cy="${p.y}" r="${last ? 17 : 11}" fill="${mixHex(t.bg1, t.bg2)}" stroke="${last ? t.accent2 : t.accent}" stroke-width="${last ? 8 : 6}" class="pop" style="animation-delay:${(0.95 + i * 0.1).toFixed(2)}s"/>`;
         vals +=
-          `<text x="${p.x}" y="${p.y-34}" text-anchor="middle" font-size="${valSize}" font-weight="800" class="numfont" fill="${last ? t.accent2 : t.ink}" style="animation:fade .5s ease ${(1.0 + i * 0.1).toFixed(2)}s both">${p.v}${esc(card.unit||'')}</text>`;
+          `<text x="${p.x}" y="${p.y-34}" text-anchor="middle" font-size="${valSize}" font-weight="800" class="numfont" fill="${vc}" style="animation:fade .5s ease ${(1.0 + i * 0.1).toFixed(2)}s both">${esc(lineDisp[i])}</text>`;
         labs +=
           `<text x="${p.x}" y="${baseY+56}" text-anchor="middle" font-size="${labSize}" font-weight="700" fill="${t.sub}">${esc(labels[i]||'')}</text>`;
       });
       const inner =
-        `<g class="fade"><text x="540" y="400" text-anchor="middle" font-size="62" font-weight="900" fill="${t.ink}">${esc(card.title || '趋势')}</text>
+        `<g class="fade"><text x="540" y="400" text-anchor="middle" font-size="${fitSize(card.title || '趋势', 960, 68, 50)}" font-weight="900" fill="${t.ink}">${esc(card.title || '趋势')}</text>
         ${industryBadge(card, t)}
         <path d="${area}" fill="url(#areaFade)" style="animation:fade .8s ease .9s both"/>
         <path d="${path}" fill="none" stroke="${t.accent}" stroke-width="26" stroke-opacity="0.15" stroke-linecap="round" stroke-linejoin="round" pathLength="1000" style="--to:0;animation:lineDraw 1.6s ease .25s both"/>
@@ -1709,6 +2304,16 @@
       const subj = card && subjectOf(card.text || card.label || '');
       return subj.length >= 2 && tok.length >= 2 && (subj.includes(tok) || tok.includes(subj));
     }
+    // 字幕/口播 token 的方向色：数字(tok)紧邻的涨跌词决定用红/绿（与 barPointNum 语义一致），否则返回 null
+    // 供 renderTitle(Hormozi字幕)分词着色：数字不再一律霓虹黄，而是跌绿/涨红
+    function trendTokenFill(tok, line, t) {
+      if (!/\d/.test(String(tok || ''))) return null;
+      const i = String(line || '').indexOf(String(tok));
+      const pre = i >= 0 ? String(line).slice(Math.max(0, i - 8), i) : '';
+      if (/(跌|降|减|负|亏|砍|缩水|缩|回落|下滑|下探|蒸发|腰斩|掉|少了|亏了|收窄)/.test(pre)) return t.light ? '#0a9a63' : '#00c48c';
+      if (/(涨|增|升|攀升|增长|上涨|上升|多|赚|攀升)/.test(pre)) return t.light ? '#e0303a' : '#ff4d4f';
+      return null;
+    }
     function hormoziTokens(line, card) {
       // 数字（含单位）为一个词，ASCII 串为一个词，中文按 2 字切分 → 逐词节奏。
       // 但 HL_NARR 里的 4 字以上关键词（上市公司/护城河/卡脖子…）先整体保护，避免被切成 2 字半词
@@ -1735,7 +2340,7 @@
       { key: 'pv', name: '光伏', re: /光伏|太阳能|硅片|组件|逆变器|光伏电站/ },
       { key: 'semi', name: '半导体', re: /半导体|芯片|晶圆|光刻|集成电路|中芯|封测|存储芯片|GPU|CPU|制程/ },
       { key: 'ne', name: '新能源', re: /新能源|电池|电动车|锂电|宁德|比亚迪|充电桩|储能|动力电池|新能源汽车/ },
-      { key: 'baijiu', name: '白酒', re: /白酒|茅台|五粮液|酒企|酿酒|酒业|国窖|泸州老窖|洋河|啤酒|红酒|酒类/ },
+      { key: 'baijiu', name: '白酒', re: /白酒|茅台|五粮液|酒企|酿酒|酒业|国窖|泸州老窖|洋河|啤酒|红酒|酒类|酒厂|高端酒|酱香|酱香型|浓香|清香|汾酒|古井|贡酒|今世缘|口子窖|郎酒|剑南春|水井坊|舍得酒|酒鬼|黄酒|葡萄酒|二锅头|老白干|西凤|迎驾|金徽/ },
       { key: 'pharma', name: '创新药', re: /创新药|医药|药企|临床|制药|生物医药|疫苗|百济|恒瑞|药明|仿制药|新药|CXO/ },
       { key: 'ai', name: 'AI', re: /AI|人工智能|大模型|算力|机器学习|深度学习|神经网络|GPT|智能体|AIGC|生成式/ },
       { key: 'fin', name: '金融', re: /金融|证券|银行|股市|基金|券商|保险|理财|资本|A股|港股|IPO|上市|市值|估值|牛市|熊市/ },
@@ -1760,16 +2365,38 @@
       semi:     { bg1: '#0a0d1a', bg2: '#141b3d', accent: '#60a5fa', accent2: '#818cf8', ink: '#eef4fb', sub: '#7a93b8', danger: '#ff6b6b' },
       consumer: { bg1: '#170a12', bg2: '#33101f', accent: '#ff7eb6', accent2: '#ff5d8f', ink: '#fdf0f5', sub: '#b78f9e', danger: '#ff6b6b' }
     };
+    // 各行业插画自带的几何中心 (cx,cy) 与宽窄适配倍率 fit：
+    // 居中摆放时把每个行业自己的视觉中心对齐到槽位，宽图缩小、窄图放大，杜绝"千图一个位"的失衡
+    const INDUSTRY_ANCHOR = {
+      baijiu:   { cx: -14, cy: -8,  fit: 1.0 },
+      tech:     { cx: 25,  cy: 5,   fit: 0.85 },
+      ai:       { cx: 0,   cy: 0,   fit: 1.0 },
+      robot:    { cx: 0,   cy: -26, fit: 1.1 },
+      pharma:   { cx: 23,  cy: -19, fit: 0.85 },
+      fin:      { cx: -5,  cy: 3,   fit: 0.85 },
+      ne:       { cx: -20, cy: -9,  fit: 1.0 },
+      pv:       { cx: 26,  cy: -15, fit: 0.85 },
+      semi:     { cx: 21,  cy: 0,   fit: 0.7 },
+      consumer: { cx: 0,   cy: -26, fit: 1.0 }
+    };
     // 取卡片主题：纯情绪主题（涨→红金、跌→墨绿金、中性→深蓝金），行业只影响插画不影响整体配色
     function themeForCard(card) {
       return THEMES[themeOfCard(card)];
     }
     // 行业专属插画（SVG 图元，图元用行业专属配色，统一 floaty 浮动动画；可指定位置与缩放）
-    function industryIllustration(ind, t, x, y, s) {
+    // anchor=true 时按 INDUSTRY_ANCHOR 对齐各行业插画自己的视觉中心并做宽窄适配，用于居中大图摆放
+    function industryIllustration(ind, t, x, y, s, anchor) {
       const ic = INDUSTRY_COLORS[ind.key] || {};
       const a = ic.accent || t.accent, a2 = ic.accent2 || t.accent2, sub = ic.sub || t.sub;
-      x = x != null ? x : 360; y = y != null ? y : 950; s = s != null ? s : 1;
-      const wrap = (inner) => `<g transform="translate(${x} ${y}) scale(${s})"><g class="floaty">${inner}</g></g>`;
+      // 默认落在右上角安全区（与数据卡徽标同位置，远离居中标题与底部字幕），用小幅浮动 floatySm 避免悬浮遮挡文字
+      x = x != null ? x : 940; y = y != null ? y : 275; s = s != null ? s : 0.38;
+      let ax = 0, ay = 0, fit = 1;
+      if (anchor) {
+        const A = INDUSTRY_ANCHOR[ind.key] || {};
+        ax = A.cx || 0; ay = A.cy || 0; fit = A.fit || 1;
+      }
+      s *= fit;
+      const wrap = (inner) => `<g transform="translate(${x - ax * s} ${y - ay * s}) scale(${s})"><g class="floatySm">${inner}</g></g>`;
       switch (ind.key) {
         case 'baijiu': // 白酒：酒瓶 + 高脚杯
           return wrap(`
@@ -1888,10 +2515,11 @@
       }
     }
 
-    // 数据卡右上角行业小徽标（统一位置，不干扰主内容）
+    // 数据卡行业大插画：固定左上角（居中标题上方、右上角页眉对角），用 INDUSTRY_ANCHOR 对齐各行业视觉中心；
+    // 取代原右上角小徽标，避免数据卡只看到一个小图标、显得"没反应"
     function industryBadge(card, t) {
-      const ind = industryOf(card.text || card.label || '');
-      return ind ? industryIllustration(ind, t, 940, 275, 0.38) : '';
+      const ind = industryOf([card.text, card.label, card.title].filter(Boolean).join(' '));
+      return ind ? industryIllustration(ind, t, 300, 285, 0.55, true) : '';
     }
 
     function renderTitle(card) {
@@ -1912,18 +2540,22 @@
         let x = 540 - totalW / 2;
         toks.forEach(tok => {
           const w = tokenW(tok, size);
-          const hl = hlToken(tok, card);
+          const tf = trendTokenFill(tok, ln, t); // 涨跌数字优先用方向色（涨红/跌绿）
+          const hl = tf ? false : hlToken(tok, card);
           const td = Math.min(0.15 + seq * 0.09, 2.2);
           body +=
-            `<text x="${(x + w / 2).toFixed(1)}" y="${startY + li * lh}" text-anchor="middle" font-size="${size}" font-weight="900" fill="${hl ? t.hl : '#FFFFFF'}" stroke="#000000" stroke-width="${strokeW}" stroke-linejoin="round" paint-order="stroke" class="tw" style="--td:${td.toFixed(2)}s">${esc(tok)}</text>`;
+            `<text x="${(x + w / 2).toFixed(1)}" y="${startY + li * lh}" text-anchor="middle" font-size="${size}" font-weight="900" fill="${tf || (hl ? t.hl : '#FFFFFF')}" stroke="#000000" stroke-width="${strokeW}" stroke-linejoin="round" paint-order="stroke" class="tw" style="--td:${td.toFixed(2)}s">${esc(tok)}</text>`;
           x += w;
           seq++;
         });
       });
-      // 简单插画
-      // 行业专属插画：命中行业则用对应图元，否则回退到通用插画
-      const ind = industryOf(card.text || card.label || '');
-      let ill = ind ? industryIllustration(ind, t) : '';
+      // 行业专属插画：字幕卡一律在文字下方居中配行业插画，撑满版面杜绝"光秃秃"；
+      // 短卡放大（0.62），长文案缩小到 0.5 并随文字底边动态下移，绝不与文字重叠（不再退回右上角小图标）
+      const ind = industryOf([card.text, card.label, card.title].filter(Boolean).join(' '));
+      const shortCard = ls.length <= 2;
+      const illY = shortCard ? 1200 : Math.round((startY + (ls.length - 1) * lh) + 250);
+      const illS = shortCard ? 0.62 : 0.5;
+      let ill = ind ? industryIllustration(ind, t, 540, illY, illS, true) : '';
       if (!ill) {
         if (/(涨|增|升|上涨|增长|上升|突破|翻)/.test(card.text)) {
           ill =
@@ -1969,9 +2601,9 @@
       });
       const maxLabelW = Math.max(...rows.map(r => textW(r.label, 50)));
       const valMaxW = Math.max(180, VAL_X - (LABEL_X + maxLabelW) - 24);
-      const topSize = Math.max(40, Math.min(76, fitSize(String(rows[0].v) + (card.unit || ''), valMaxW, 76, 40)));
-      const rowSize = Math.max(36, Math.min(62, fitSize(String(rows[0].v) + (card.unit || ''), valMaxW, 62, 36)));
-      let out = `<text x="540" y="400" text-anchor="middle" font-size="62" font-weight="900" fill="${t.ink}" class="fade">${esc(card.title || '排行榜')}</text>`;
+      const topSize = Math.max(40, Math.min(76, fitSize(String(rows[0].v) + unitOfCard(card, rows[0].v), valMaxW, 76, 40)));
+      const rowSize = Math.max(36, Math.min(62, fitSize(String(rows[0].v) + unitOfCard(card, rows[0].v), valMaxW, 62, 36)));
+      let out = `<text x="540" y="400" text-anchor="middle" font-size="${fitSize(card.title || '排行榜', 960, 68, 50)}" font-weight="900" fill="${t.ink}" class="fade">${esc(card.title || '排行榜')}</text>`;
       out += industryBadge(card, t);
       rows.forEach((r, i) => {
         const y = topY + i * rowH;
@@ -1983,7 +2615,7 @@
           <text x="196" y="${y + 86 + (isTop ? 26 : 22)}" text-anchor="middle" font-size="${isTop ? 72 : 60}" font-weight="900" class="numfont" fill="${i < 3 ? '#1B2233' : t.ink}">${i + 1}</text>
           <text x="292" y="${y + 70}" font-size="50" font-weight="800" fill="${isTop ? t.accent : t.ink}">${esc(r.label)}</text>
           <text x="292" y="${y + 138}" font-size="34" font-weight="700" fill="${t.sub}">第 ${i + 1} 位</text>
-          <text x="950" y="${y + 108}" text-anchor="end" font-size="${isTop ? topSize : rowSize}" font-weight="900" class="numfont" fill="${isTop ? t.accent : t.ink}" style="animation:fade .5s ease ${(0.65 + i * 0.16).toFixed(2)}s both">${r.v}${esc(card.unit || '')}</text>
+          <text x="950" y="${y + 108}" text-anchor="end" font-size="${isTop ? topSize : rowSize}" font-weight="900" class="numfont" fill="${isTop ? t.accent : t.ink}" style="animation:fade .5s ease ${(0.65 + i * 0.16).toFixed(2)}s both">${r.v}${esc(unitOfCard(card, r.v))}</text>
         </g>`;
       });
       out += bottomCaption(card, {});
@@ -2021,17 +2653,17 @@
       const lUnitX = lNumCx + la.numW / 2 + la.gap + la.unitW / 2;
       const rUnitX = rNumCx + ra.numW / 2 + ra.gap + ra.unitW / 2;
       const inner = `<g class="fade">
-        <text x="540" y="390" text-anchor="middle" font-size="60" font-weight="900" fill="${t.ink}">${esc(card.title || '数据对比')}</text>
+        <text x="540" y="390" text-anchor="middle" font-size="${fitSize(card.title || '数据对比', 960, 66, 48)}" font-weight="900" fill="${t.ink}">${esc(card.title || '数据对比')}</text>
         ${industryBadge(card, t)}
         <g style="animation:fade .6s ease .15s both">${panelL}${panelR}</g>
         <text x="290" y="610" text-anchor="middle" font-size="48" font-weight="800" fill="${t.accent}" letter-spacing="6">${esc(String(L.label).slice(0, 8))}</text>
         <text x="790" y="610" text-anchor="middle" font-size="48" font-weight="800" fill="${t.accent2}" letter-spacing="6">${esc(String(R.label).slice(0, 8))}</text>
         ${odometer(String(L.value), lNumCx, 890, numSize, t.accent)}
         ${odometer(String(R.value), rNumCx, 890, numSize, t.accent2)}
-        ${L.unit ? `<text x="${lUnitX.toFixed(0)}" y="${890 - Math.round(numSize * 0.15)}" text-anchor="middle" font-size="${la.unitSize}" font-weight="800" class="numfont" fill="${t.ink}">${esc(L.unit)}</text>` : ''}
-        ${R.unit ? `<text x="${rUnitX.toFixed(0)}" y="${890 - Math.round(numSize * 0.15)}" text-anchor="middle" font-size="${ra.unitSize}" font-weight="800" class="numfont" fill="${t.ink}">${esc(R.unit)}</text>` : ''}
-        <text x="290" y="1080" text-anchor="middle" font-size="38" font-weight="700" fill="${t.sub}">${trendDir(L.label + ' ' + card.text) === 'down' ? '▼ 回落' : '▲ 领先'}</text>
-        <text x="790" y="1080" text-anchor="middle" font-size="38" font-weight="700" fill="${t.sub}">${trendDir(R.label + ' ' + card.text) === 'up' ? '▲ 增长' : '▼ 承压'}</text>
+        ${(L.unit || unitOfCard(card, L.value)) ? `<text x="${lUnitX.toFixed(0)}" y="${890 - Math.round(numSize * 0.15)}" text-anchor="middle" font-size="${la.unitSize}" font-weight="800" class="numfont" fill="${t.ink}">${esc(L.unit || unitOfCard(card, L.value))}</text>` : ''}
+        ${(R.unit || unitOfCard(card, R.value)) ? `<text x="${rUnitX.toFixed(0)}" y="${890 - Math.round(numSize * 0.15)}" text-anchor="middle" font-size="${ra.unitSize}" font-weight="800" class="numfont" fill="${t.ink}">${esc(R.unit || unitOfCard(card, R.value))}</text>` : ''}
+        <text x="290" y="1080" text-anchor="middle" font-size="38" font-weight="700" fill="${t.sub}">${trendDir(L.label + ' ' + card.text) === 'down' ? '▼ 回落' : trendDir(L.label + ' ' + card.text) === 'up' ? '▲ 领先' : '· 持平'}</text>
+        <text x="790" y="1080" text-anchor="middle" font-size="38" font-weight="700" fill="${t.sub}">${trendDir(R.label + ' ' + card.text) === 'up' ? '▲ 增长' : trendDir(R.label + ' ' + card.text) === 'down' ? '▼ 承压' : '· 持平'}</text>
         <g class="vsBadge">
           <circle cx="540" cy="860" r="96" fill="url(#acc)" opacity="0.96"/>
           <circle cx="540" cy="860" r="96" fill="none" stroke="#fff" stroke-opacity="0.5" stroke-width="5"/>
@@ -2047,7 +2679,11 @@
       const t = themeForCard(card);
       const k = card.kpi;
       if (!k) return renderTitle({ text: card.text || '' });
-      const pct = Math.max(0, Math.min(100, k.num));
+      const layout = absTrendLayout(card);
+      // 趋势主字体时，表盘按涨跌幅填充（"涨了27.3%"→27.3%）
+      const pct = layout.main
+        ? Math.max(0, Math.min(100, parseFloat(String(layout.main).replace(/[^\d.]/g, '')) || 0))
+        : Math.max(0, Math.min(100, k.num));
       // 表盘上移 + 指针底座缩小 + 数字字号封顶，三者共同保证大数字顶部始终低于指针底座下缘（不遮挡）
       const cx = 540, cy = 940, R = 340;
       const arcPath = `M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`;
@@ -2062,9 +2698,10 @@
       }
       // ===== 大号加减符号贴在数字前面：符号+数字+单位整组居中（同 KPI 财务写法）=====
       const gdir = dirOfCard(card);
-      const gShow = gdir === 'up' || gdir === 'down';
+      // 与 KPI 同一规则（用户已反馈三次）：涨加 +、跌加 −，不再区分绝对数/百分比
+      const gShow = (gdir === 'up' || gdir === 'down');
       const gMain = gShow ? String(Math.abs(Number(k.num))) : String(k.num);
-      const gunit = ((k.unit === '％' ? '%' : (k.unit || '')) || ((/%|％/.test(card.text || '')) ? '%' : '')) || measUnitOf(card.text || '', String(k.num));
+      const gunit = unitOfCard(card, k.num);
       const nl = numUnitLayout(gMain, gunit, gShow ? 500 : 620, 200);
       const gsize = nl.size;
       const gSymSize = gsize;
@@ -2075,22 +2712,27 @@
       const gNumCx = gLeftX + gSymW + gSymGap + nl.numW / 2;
       const gUnitX = gNumCx + nl.numW / 2 + nl.gap + nl.unitW / 2;
       const gSymFill = gdir === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : (t.light ? '#e0303a' : '#ff4d4f');
+      // 表盘主数字与圆弧同样跟随方向色（涨红跌绿），与 +/- 号保持一致；
+      // 原实现圆弧用主题渐变 url(#acc)、数字用 t.ink → "涨"的卡仍是绿色环
+      const gColor = gdir === 'down' ? (t.light ? '#0a9a63' : '#00c48c') : (gdir === 'up' ? (t.light ? '#e0303a' : '#ff4d4f') : t.accent);
       const nd = -90 + (pct / 100) * 180;
+      // 主字体：数字滚轮+单位+符号（趋势短语只影响标题与表盘填充，主字体始终显示数字）
+      const gMainBody = `${odometer(gMain, gNumCx, 1160, gsize, gColor)}` +
+        `${gunit ? `<text x="${gUnitX.toFixed(0)}" y="${1160 - Math.round(gsize * 0.15)}" text-anchor="middle" font-size="${nl.unitSize}" font-weight="800" class="numfont" fill="${gColor}">${esc(gunit)}</text>` : ''}` +
+        `${gShow ? `<g class="${gdir === 'up' ? 'arrowNudge' : 'arrowNudgeD'}" style="animation-delay:1.3s"><text x="${(gLeftX + gSymW / 2).toFixed(0)}" y="${1160 - Math.round(gsize * 0.04)}" text-anchor="middle" font-size="${gSymSize}" font-weight="900" fill="${gSymFill}" style="animation:deltaPop .7s cubic-bezier(.2,1.5,.4,1) .6s both">${gdir === 'down' ? '−' : '+'}</text></g>` : ''}`;
       const inner = `<g class="fade">
-        <text x="540" y="440" text-anchor="middle" font-size="54" font-weight="800" fill="${t.sub}" letter-spacing="10">${esc(card.label)}</text>
+        <text x="540" y="440" text-anchor="middle" font-size="${fitSize(layout.title, 900, 60, 44)}" font-weight="800" fill="${t.sub}" letter-spacing="10">${esc(layout.title)}</text>
         ${industryBadge(card, t)}
         <path d="${arcPath}" fill="none" stroke="${t.sub}" stroke-opacity="0.22" stroke-width="40" stroke-linecap="round"/>
-        <path d="${arcPath}" fill="none" stroke="url(#acc)" stroke-width="40" stroke-linecap="round" pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="${Math.round(1000 - 1000 * pct / 100)}" style="--to:${Math.round(1000 - 1000 * pct / 100)}" class="ringSweep"/>
+        <path d="${arcPath}" fill="none" stroke="${gColor}" stroke-width="40" stroke-linecap="round" pathLength="1000" stroke-dasharray="1000" stroke-dashoffset="${Math.round(1000 - 1000 * pct / 100)}" style="--to:${Math.round(1000 - 1000 * pct / 100)}" class="ringSweep"/>
         ${ticks}
         <g transform="translate(${cx} ${cy})"><g class="gaugeNeedle" style="--nd:${nd.toFixed(1)}deg">
           <line x1="0" y1="0" x2="0" y2="${-(R - 88)}" stroke="${t.hl}" stroke-width="16" stroke-linecap="round"/>
           <line x1="0" y1="0" x2="0" y2="${-(R - 88)}" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-opacity="0.85"/>
         </g>
-        <circle cx="0" cy="0" r="28" fill="url(#acc)"/><circle cx="0" cy="0" r="28" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="5"/>
+        <circle cx="0" cy="0" r="28" fill="${gColor}"/><circle cx="0" cy="0" r="28" fill="none" stroke="#fff" stroke-opacity="0.55" stroke-width="5"/>
         <circle cx="0" cy="0" r="10" fill="#fff"/></g>
-        ${odometer(gMain, gNumCx, 1160, gsize, t.ink)}
-        ${gunit ? `<text x="${gUnitX.toFixed(0)}" y="${1160 - Math.round(gsize * 0.15)}" text-anchor="middle" font-size="${nl.unitSize}" font-weight="800" class="numfont" fill="${/%|％/.test(gunit) ? t.accent : t.ink}" ${/%|％/.test(gunit) ? '' : 'fill-opacity="0.92"'}>${esc(gunit)}</text>` : ''}
-        ${gShow ? `<g class="${gdir === 'up' ? 'arrowNudge' : 'arrowNudgeD'}" style="animation-delay:1.3s"><text x="${(gLeftX + gSymW / 2).toFixed(0)}" y="${1160 - Math.round(gsize * 0.04)}" text-anchor="middle" font-size="${gSymSize}" font-weight="900" fill="${gSymFill}" style="animation:deltaPop .7s cubic-bezier(.2,1.5,.4,1) .6s both">${gdir === 'down' ? '−' : '+'}</text></g>` : ''}
+        ${gMainBody}
         ${bottomCaption(card, {})}
       </g>`;
       return svgShell(inner, { card });
@@ -2120,16 +2762,64 @@
           seq++;
         });
       });
-      const ind = industryOf(card.text || card.label || '');
+      const ind = industryOf([card.text, card.label, card.title].filter(Boolean).join(' '));
       const inner = `<g class="fade">
         <text x="150" y="620" font-size="300" font-weight="900" fill="${t.accent}" fill-opacity="0.18" class="fade">“</text>
         <text x="930" y="1200" text-anchor="end" font-size="300" font-weight="900" fill="${t.accent}" fill-opacity="0.18" class="fade" style="animation-delay:.2s">”</text>
         <rect x="390" y="${startY + ls.length * lh + 40}" width="300" height="14" rx="7" fill="url(#acc)" class="ulSweep"/>
         ${body}
-        ${ind ? industryIllustration(ind, t, 540, 1230, 0.5) : ''}
+        ${ind ? industryIllustration(ind, t, 540, 1230, 0.5, true) : ''}
         ${bottomCaption(card, { text: card.sub || '', delay: 0.6 })}
       </g>`;
       return svgShell(inner, { card });
+    }
+
+    // ---- 收尾卡：结尾创作口播"我是XXX 关注我 下期见"自动识别为最后一张卡 ----
+    // 布局：第一行"我是陆新"（同一基线居中），第二行"关注我 / 下期见"并排胶囊（关注我实心主按钮）
+    function renderSignoff(card) {
+      const t = themeForCard(card);
+      const host = String(card.host || '');
+      let acts = (card.acts && card.acts.length) ? card.acts.slice(0, 3) : ['关注我', '下期见'];
+      // 兼容旧存档卡：无论原句如何，"关注我"永远是第一个主按钮
+      if (acts[0] !== '关注我') acts.unshift('关注我');
+      acts = acts.slice(0, 3);
+      let body = '';
+      // 第一行：我是 陆新（同一基线，名字按长度自适应字号）
+      const y1 = 900;
+      if (host) {
+        const h1 = 76;
+        const h2 = host.length <= 2 ? 150 : host.length === 3 ? 128 : host.length <= 4 ? 104 : 82;
+        const gap0 = 30;
+        const w1 = h1 * 2, w2 = h2 * host.length;
+        const total = w1 + gap0 + w2;
+        const x1 = 540 - total / 2 + h1;
+        const x2 = 540 - total / 2 + w1 + gap0 + w2 / 2;
+        body += `<text x="${x1.toFixed(1)}" y="${y1}" text-anchor="middle" font-size="${h1}" font-weight="700" fill="${t.sub}" class="rise2" style="--td:.1s">我是</text>`;
+        body += `<text x="${x2.toFixed(1)}" y="${y1}" text-anchor="middle" font-size="${h2}" font-weight="900" fill="${t.hl}" class="rise2" style="--td:.45s">${esc(host)}</text>`;
+      } else {
+        body += `<text x="540" y="${y1}" text-anchor="middle" font-size="130" font-weight="900" fill="${t.hl}" class="rise2" style="--td:.4s">感谢观看</text>`;
+      }
+      body += `<rect x="390" y="1012" width="300" height="8" rx="4" fill="url(#acc)" class="ulSweep"/>`;
+      // 第二行：关注我 / 下期见 并排胶囊（关注我实心主按钮，其余描边）
+      const n = acts.length;
+      const cw = n === 1 ? 420 : n === 2 ? 350 : 272;
+      const gap = 36;
+      const total2 = n * cw + (n - 1) * gap;
+      const by = 1140, bh = 122;
+      let x = 540 - total2 / 2 + cw / 2;
+      acts.forEach((a, i) => {
+        const rd = (0.9 + i * 0.22).toFixed(2);
+        const isMain = i === 0;
+        const fill = isMain ? 'url(#acc)' : t.glassFill;
+        const stroke = isMain ? '' : ` stroke="${t.accent}" stroke-width="3"`;
+        const col = isMain ? '#0b1526' : t.accent;
+        body += `<g class="tagCaps" style="--rd:${rd}s">
+          <rect x="${(x - cw / 2).toFixed(1)}" y="${by}" width="${cw}" height="${bh}" rx="${Math.round(bh / 2)}" fill="${fill}"${stroke}/>
+          <text x="${x.toFixed(1)}" y="${by + bh / 2 + 20}" text-anchor="middle" font-size="${isMain ? 58 : 50}" font-weight="900" fill="${col}">${esc(a)}</text>
+        </g>`;
+        x += cw + gap;
+      });
+      return svgShell(`<g class="fade">${body}${industryBadge(card, t)}</g>`, { card });
     }
 
     // ---- 时间线卡：横向轴线 + 节点逐个点亮，末节点发光 ----
@@ -2143,7 +2833,7 @@
       const startX = 170, endX = 910, axisY = 900;
       const nodeBg = mixHex(t.bg1, t.bg2);
       const cells = nums.length >= 2
-        ? nums.map((v, i) => ({ x: 0, top: labels[i] || (i + 1) + '', bottom: v + (card.unit || ''), num: true }))
+        ? nums.map((v, i) => ({ x: 0, top: labels[i] || (i + 1) + '', bottom: v + unitOfCard(card, v), num: true }))
         : evts.map(p => ({ x: 0, top: p.year || '', bottom: p.label || '', num: false }));
       // 相邻节点文字不重叠：按最宽文本自适应字号（预留 24px 间隙），字号到下限仍超宽则截断
       const spacing = (endX - startX) / (n - 1);
@@ -2172,7 +2862,7 @@
         </g>`;
       });
       const inner = `<g class="fade">
-        <text x="540" y="400" text-anchor="middle" font-size="62" font-weight="900" fill="${t.ink}">${esc(card.title || '发展历程')}</text>
+        <text x="540" y="400" text-anchor="middle" font-size="${fitSize(card.title || '发展历程', 960, 68, 50)}" font-weight="900" fill="${t.ink}">${esc(card.title || '发展历程')}</text>
         ${industryBadge(card, t)}
         <line x1="${startX}" y1="${axisY}" x2="${endX}" y2="${axisY}" stroke="${t.sub}" stroke-opacity="0.25" stroke-width="8" stroke-linecap="round"/>
         <line x1="${startX}" y1="${axisY}" x2="${endX}" y2="${axisY}" stroke="url(#acc)" stroke-width="8" stroke-linecap="round" pathLength="1000" class="lineDraw" style="--to:0"/>
@@ -2187,12 +2877,13 @@
       const t = themeForCard(card);
       let tags = (card.labels && card.labels.length) ? card.labels.slice(0, 5) : extractTags(card.text);
       if (!tags.length) tags = ['关键要点'];
+      const ttl0 = String(card.title || '');
+      // 保留全部要点，一条不删；仅当标题与任一要点重复时，把标题换成"N 个要点"（历史卡也生效）
+      const ttl = (!ttl0 || tags.some(x => String(x).trim() === ttl0.trim())) ? (tags.length + ' 个要点') : ttl0;
       const colors = [t.accent, t.accent2, t.hl, t.danger || t.accent2, t.accent];
       const nums = [1, 2, 3, 4, 5];
       const n = tags.length;
-      // 标题自适应字号（≤10 字 66 / ≤12 字 58 / 更长 50），整体加大一档
-      const ttl = String(card.title || n + ' 个要点');
-      const tSize = ttl.length <= 10 ? 66 : ttl.length <= 12 ? 58 : 50;
+      const tSize = ttl.length <= 10 ? 72 : ttl.length <= 12 ? 64 : 56;
       // 少量标签时拉开行距并垂直居中；底部字幕有衬底板，按板位置自动预留间隙避免重叠
       const availTop = 500;
       const availBottom = Math.min(captionPlateTop(card) - 26, 1280);
@@ -2239,7 +2930,8 @@
       if (type === 'bar' || type === 'line' || type === 'rank' || type === 'timeline') {
         const counts = {};
         nums.forEach(n => counts[n.unit] = (counts[n.unit] || 0) + 1);
-        const primaryUnit = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+        const nonEmptyUnits = Object.keys(counts).filter(k => k !== '');
+      const primaryUnit = (nonEmptyUnits.length ? nonEmptyUnits : Object.keys(counts)).sort((a, b) => counts[b] - counts[a])[0];
         const series = nums.filter(n => n.unit === primaryUnit);
         const s = series.length ? series : nums;
         let labels = labelsForSeries(t, primaryUnit, s.length || 1);
@@ -2247,15 +2939,21 @@
           const years = (t.match(/20\d{2}/g) || []).slice(0, 5);
           if (years.length) labels = years;
         }
-        return { type, title: t.length > 16 ? t.slice(0, 16) + '…' : t, text: t, nums: s.map(n => n.num).slice(0, 5), unit: primaryUnit ||
-            '', labels: labels.slice(0, 5) };
+        const pts5 = s.slice(0, 5).map(n => barPointNum(t, n));
+        if (type === 'bar') labels = semBarLabels(t, pts5, labels);
+        return { type, title: t.length > 16 ? t.slice(0, 16) + '…' : t, text: t, nums: pts5.map(e => e.num),
+          dirs: pts5.map(e => e.dir || 'flat'), unit: primaryUnit || '', labels: labels.slice(0, 5) };
       }
       if (type === 'kpi' || type === 'gauge') {
         const k = pickKpi(nums);
         let label = '关键数据';
-        const metrics = ['渗透率', '增长率', '市占率', '毛利率', '净利率', '利润率', '增速', '营收', '净利润', '净利', '利润', '估值', '市值'];
+        const metrics = FIN_METRICS;
         for (const kw of metrics) { if (t.includes(kw)) { label = kw; break; } }
-        return { type, label: label, text: t, kpi: k || { text: '0', num: 0, unit: '' }, dir: trendDir(t) };
+        label = prependTime(label, t);
+        // 主数字跟指标词：标题已锁定某指标时优先取该指标后紧邻的涨跌数字，避免多指标句抓错主数值
+        const cur = linkedKpi(t, label, k) || (k || { text: '0', num: 0, unit: '' });
+        const rightDir = cur.dir ? cur.dir : trendDir(t);
+        return { type, label: label, text: t, kpi: { text: cur.text, num: cur.num, unit: cur.unit }, dir: rightDir };
       }
       if (type === 'vs') {
         const pts = extractDataPoints(t);
@@ -2280,14 +2978,13 @@
     // ================================
     //  智能拆解：口播脚本 -> 镜头序列
     // ================================
-    const KPI_METRICS = ['渗透率', '增长率', '市占率', '占有率', '毛利率', '净利率', '利润率', '收益率', '回报率', '转化率', '复购率',
-      '增速', '规模', '营收', '收入', '净利润', '净利', '利润', '成本', '占比', '份额', '需求', '估值', '预期', '价格', '数量',
-      '金额', '市值', '客单价'
-    ];
+    // 指标标签词表 = 集中词库 FIN_METRICS（长词优先，已含英文缩写）+ 补充指标词。
+    // 以后新增专业名词只加 FIN_METRICS，这里自动生效
+    const KPI_METRICS = FIN_METRICS.concat(['回报率', '转化率', '复购率', '成本', '出口', '房价', '油价', '产能']);
 
     // ---- 标题精炼：剥离口头语/时间限定，抽取"主体+指标"短标题（初次生成即贴近成品） ----
     const TITLE_METRICS = KPI_METRICS.concat(['销量', '销售额', '交付量', '产量', '产能', '出货量', '保有量', '订单', '库存', '出口', '房价', '油价', '股价', '用户', '会员', '门店', '融资']);
-    const TITLE_OPENERS = /^(?:(?:大家|各位|你们|咱们|我们|我)(?:快)?(?:看|看看|听听|注意|想想|猜猜)|告诉你|说实话|说白了|讲真|注意了?|问题来了|有意思的是|没想到)[^，,。]{0,8}[，,]/;
+    const TITLE_OPENERS = new RegExp('^(?:(?:' + FIN_OPENERS + ')(?:快)?(?:看|看看|听听|注意|想想|猜猜)|' + FIN_OPENERS + '|没想到)[^，,。]{0,8}[，,]');
     const TITLE_CONNS = /^(?:那|那么|但是|可是|不过|而且|所以|于是|接下来|然后|再看|另外)[，,]/;
     const TITLE_TIMES = /(?:19|20)\d{2}\s*年(?:上半年|下半年|一季度|二季度|三季度|四季度|度)?|今年|去年|前年|上年|明年|后年|上半年|下半年|一季度|二季度|三季度|四季度|目前|现在|当前|近期|最新|过去[一两三四五几]?年|未来[一两三四五几]?年/g;
     const TITLE_TAILS = /(的|了|把|将|预计|预测|专家|机构|显示|来看|来说|已经|还是|只剩|只有|还有|整个)$/;
@@ -2311,6 +3008,8 @@
     // 由数据单位推断指标名（辆→销量、台→数量、%→占比…）
     function metricFromUnit(s) {
       s = String(s || '');
+      if (/[\d.]+\s*(?:万|亿|千|万亿)?\s*GW(?![A-Za-z])/.test(s)) return '装机量';
+      if (/[\d.]+\s*(?:万|亿)?\s*手/.test(s)) return '成交量';
       if (/[\d.]+\s*(?:万|亿|千|万亿)?\s*辆/.test(s)) return '销量';
       if (/[\d.]+\s*(?:万|亿)?\s*台/.test(s)) return '数量';
       // "22亿人民币"是金额不是人数：人/名/位后跟"民"时不算用户
@@ -2323,14 +3022,39 @@
 
     function subjectBefore(x, kw) {
       const i = x.indexOf(kw);
-      let head = (x.slice(Math.max(0, i - 10), i).split(/[，,、。；：]/).pop() || '');
+      // filter(Boolean) 去掉 split 因窗口末尾紧邻分隔符（如"迈瑞半年报，"）产生的空段，否则 pop 会取到空、丢掉真主体
+      let head = (x.slice(Math.max(0, i - 12), i).split(/[，,、。；：]/).filter(Boolean).pop() || '');
       let prev;
       do { prev = head; head = head.replace(TITLE_TAILS, ''); } while (head !== prev && head.length);
       return head;
     }
 
+    // 剥掉主语开头的转折/递进/因果连接词（"但另一面，收入涨6%"→主语"但另一面"是连接词不是真主体，剥成"收入"）。
+    // 循环剥（可连续多个）；剥后为空（纯连接词）或剩余≥2 字都接受，避免把真实短主语（如"也门"）误删
+    function stripConnLead(s) {
+      // 复合连接词必须排在单字前（"但是X"若先匹配"但"会剩"是X"、"而且X"先匹配"而"会剩"且X"）
+      const re = /^(?:但是|但另一面|但另一方面|而且|然而|可是|与此同时|也就是说|换句话说|事实上|接下来|再比如|另一面|另一方面|但|而|却|反而|反倒|只是|不过|并且|同时|还有|另外|此外|又|也|还|更|甚至|乃至|所以|于是|因此|结果|最终|终于|然后|再看|比如|例如|原来|其实|当然|就是|反观)[，,、]?/;
+      let cur = String(s || '');
+      for (;;) {
+        const nx = cur.replace(re, '');
+        if (nx === cur) break;
+        if (nx.length === 0) { cur = nx; break; }
+        if (nx.length >= 2) { cur = nx; continue; }
+        break;
+      }
+      return cur;
+    }
+
+    // 主语清洗：去掉数字及之后的内容（"半年报收窄1.61%"→"半年报"）、尾部趋势动词，
+    // 避免"收入涨6%"这类带数据/趋势的片段被当主语拼进标题（"年报收窄1.61%收入"→"半年报收入"）
+    function cleanSubj(s) {
+      let cur = String(s || '').replace(/[\d.]+%?.*$/, '');
+      cur = cur.replace(/(收窄|回落|下滑|下跌|上涨|上升|增长|下降|走强|走弱|回升|反弹|扩大|缩小|减少|增加|创新高|翻倍|企稳|止跌|掉|涨|跌)$/, '');
+      return cur;
+    }
+
     // 标题里没信息量的泛指主语（"这家/那家/某/一家/我们"），抓住重点时直接剥掉，别让它们占字数
-    const FILLER_SUBJECTS = /^(?:我|我们|你们|大家|咱们|人家|这家公司|那家公司|这公司|那公司|一家公司|一个公司|整个公司|某公司|公司|企业)/;
+    const FILLER_SUBJECTS = new RegExp('^(?:' + FIN_FILLER_SUBJECTS + ')');
     // 右端截断但始终保留完整指标词：宁可裁主语前部，也不砍指标字（"再贷款占比"不剪成"再贷款占"）
     function clampKeepTail(t, max, metric) {
       const s = String(t || '');
@@ -2349,11 +3073,33 @@
         for (const kw of TITLE_METRICS) { if (x.includes(kw)) return clampTitle(kw + '排行榜', 10); }
         return clampTitle((metricFromUnit(x) || '核心数据') + '排行榜', 10);
       }
-      // 主轴：命中指标词(营收/利润/占比…)时，头为主体、尾为完整指标词，绝不在指标词中间截断
+      // 主轴：命中指标词(营收/利润/占比…)时，头为主体、尾为完整指标词，绝不在指标词中间截断。
+      // 候选排序 = 先选"承载数据或趋势"的指标词（"收入涨6%""M2增速回升"才是叙事中心），
+      // 同权重再取文中位置最早者。这既让"收入涨6%利润跌5%"主题=收入（先出现），
+      // 又不让"社融规模超预期，M2增速回升"里无数据的铺垫"社融"顶掉要点指标"M2"
+      const ACTIVE_AFTER = /[0-9一二三四五六七八九十]|[涨跌增减少升降回落回暖收窄扩大走高走低走强创新高翻倍企稳]/;
+      const cands = [];
       for (const kw of TITLE_METRICS) {
         if (!x.includes(kw)) continue;
-        const head = subjectBefore(x, kw).replace(FILLER_SUBJECTS, '');
-        return clampKeepTail(head.length >= 2 ? head + kw : kw, 12, head.length >= 2 ? kw : '');
+        const j = x.indexOf(kw);
+        // 只看指标词"本段"（到下一个标点为止）是否承载数据/趋势，避免跨标点偷看下一段的数字：
+        // "社融规模超预期，M2增速回升"里"社融规模"的段是"超预期"（无数据），不得借"M2"的"2"变活跃
+        const after = x.slice(j + kw.length).split(/[，,。；；：:、]/)[0].slice(0, 8);
+        const active = ACTIVE_AFTER.test(after);
+        cands.push({ j, kw, active, head: subjectBefore(x, kw).replace(FILLER_SUBJECTS, '') });
+      }
+      cands.sort((a, b) => (b.active - a.active) || (a.j - b.j));
+      // 主轴主体只保留"财务期次词"起的部分，剥掉其前的公司名/股票简称：
+      // "迈瑞半年报"→"半年报"，再拼指标得"半年报收入"（用户明确不要公司名）；无期次词时保留原样
+      const stripCompany = head => {
+        const s = String(head || '');
+        const m = s.match(/(半年报|年报|一季报|二季报|三季报|四季报|季报|中报|财报|年度报告|半年度报告|年度|半年度)/);
+        return m ? s.slice(m.index) : s;
+      };
+      const fp = cands[0];
+      if (fp) {
+        const subj = stripCompany(stripConnLead(cleanSubj(fp.head)));
+        return clampKeepTail(subj.length >= 2 ? subj + fp.kw : fp.kw, 12, subj.length >= 2 ? fp.kw : '');
       }
       const mv = x.match(/([\u4e00-\u9fa5A-Za-z0-9]{2,12}?)(卖了|卖到|达到|做到了?|冲到|突破|涨到|涨至|跌到|跌至|降到|降至|升至|只剩|只有|高达|约为|亏了|赚了|翻了|扭亏|盈利)/);
       if (mv) {
@@ -2377,6 +3123,27 @@
       return clampTitle(x.replace(/[，,。、；：！？]/g, ''));
     }
 
+    // 双指标条形卡标题去重：当顶部标题是裸指标词（如"收入"）且与某一行标签（如"收入"）完全相同时，
+    // 若两行方向真正涨跌对立（一涨一跌）则升格为概括词"涨跌分化"从根子上杜绝"标题=行标签"重复；
+    // 但并列绝对数卡（"DAU达到2亿，MAU3亿"→标题DAU）方向无涨跌，标题与首行指标重复是合理的并列语义，保留原样。
+    // 带期次词的标题（"半年报收入"）不与标签完全重复，也原样保留
+    function barContrastTitle(labels, dirs, title) {
+      const lbs = Array.isArray(labels) ? labels : [];
+      let tp = String(title || '');
+      const dd = Array.isArray(dirs) ? dirs.map(d => String(d)).filter(Boolean) : [];
+      const up = dd.some(d => d === 'up'), down = dd.some(d => d === 'down');
+      if (tp && up && down &&
+        !/.+?(年|季|月|月报|季报|半年报|年报|中期|全年|半年|H1|Q[1-4])$/.test(tp) &&
+        lbs.some(l => String(l || '') === tp)) {
+        tp = '涨跌分化';
+      }
+      return tp;
+    }
+    function assignBarTitle(card) {
+      card.title = barContrastTitle(card.labels, card.dirs, card.title);
+      return card;
+    }
+
     // 口播语速估时：约 4.5 字/秒，clamp 到 [min, 12]
     function durForText(s, min) {
       const len = String(s || '').replace(/\s/g, '').length;
@@ -2386,6 +3153,34 @@
     function metricLabelOf(s) {
       for (const kw of KPI_METRICS) { if (s.includes(kw)) return kw; }
       return '关键数据';
+    }
+
+    // 指标卡标题合成：取"指标词之前最近的时间词"作前缀，拼成"今年分红""近三年分红"；
+    // 找不到时间词或标签已带时间词时原样返回
+    function timePrefixOf(s, metric) {
+      const str = String(s || '');
+      const kw = String(metric || '');
+      const ki = kw ? str.indexOf(kw) : -1;
+      let best = '', bestI = -1;
+      for (const p of FIN_TIME_PREFIX) {
+        const re = new RegExp(p, 'g');
+        let m;
+        while ((m = re.exec(str)) !== null) {
+          if (ki < 0 || m.index < ki) {
+            if (m.index > bestI) { bestI = m.index; best = m[0]; }
+          }
+        }
+      }
+      return best;
+    }
+    function prependTime(label, s) {
+      const lb = String(label || '');
+      if (!lb || lb === '关键数据') return lb;
+      if (new RegExp('^(?:' + FIN_TIME_PREFIX.join('|') + ')').test(lb)) return lb;
+      let kw = '';
+      for (const w of FIN_METRICS) { if (lb.includes(w)) { kw = w; break; } }
+      const tp = timePrefixOf(s, kw);
+      return tp ? tp + lb : lb;
     }
 
     // 口播叙述开头的垃圾项：不是要点，过滤掉避免"我是陆新"这类口播被当标签
@@ -2407,8 +3202,11 @@
       const dl = s.match(/[\u4e00-\u9fa5A-Za-z0-9]{2,12}(?:[、,，][\u4e00-\u9fa5A-Za-z0-9]{2,12}){1,}/);
       if (dl) {
         const parts = dl[0].split(/[、,，]/).map(x => x.trim()).filter(Boolean);
+        // 顿号/逗号并列只收"词/短语"级要点：开头是连接词（也/还/又…）或带"了"的成句子句是叙述不是要点
+        //（"今年一季度，它也跌了"→"它也跌了"不成要点），避免把"时间+碎句"错做成标签卡
+        const isClause = p => /^(也|还|又|仍|都|就|并|但|而|再|更|且|不|没|却|才)/.test(p) || /了$/.test(p);
         // 真实枚举不会混入口播叙述项：一旦出现垃圾项，整句按叙述处理（并入下一张数据卡）
-        if (parts.length >= 2 && parts.every(p => !TAG_JUNK.test(p)) && (parts.length >= 3 || Math.max(...parts.map(p => p.length)) <= 8)) {
+        if (parts.length >= 2 && parts.every(p => !TAG_JUNK.test(p) && !isClause(p)) && (parts.length >= 3 || Math.max(...parts.map(p => p.length)) <= 8)) {
           return parts.slice(0, 5);
         }
       }
@@ -2433,6 +3231,30 @@
       return false;
     }
 
+    // 结尾创作口播收尾识别（仅末句生效）："我是谁谁谁 + 关注我 + 下期见"组合
+    function isEndingSignoff(s) {
+      const t = String(s || '').trim();
+      if (creatorSignoff(t)) return true;
+      if (/(关注我|点个关注|记得关注|关注一下)/.test(t) && /(下期|下回|下次|下一期|再见|拜拜)/.test(t)) return true;
+      if (/^我是[^，。！？!?；;、]{1,10}/.test(t) && /(关注|下期|点赞|再见|谢谢|感谢|欢迎)/.test(t)) return true;
+      return false;
+    }
+    // 从口播句提取主持人名 + 行动号召短语（关注/点赞/转发/下期见）
+    function parseSignoff(s) {
+      const t = String(s || '').trim();
+      let host = '';
+      const hm = /我是\s*([^\s，,。！？!?；;、]{1,8})/.exec(t);
+      if (hm) host = hm[1].split(/(?=下期|下回|下次|下一期|关注|点赞|转发|再见|拜拜|谢谢|感谢|欢迎|咱们|我们|记得)/)[0];
+      const acts = [];
+      // 关注是最重要的引导，收尾卡始终展示（无论原句是否提到）
+      acts.push('关注我');
+      if (/(点赞|点个赞|记得点赞)/.test(t)) acts.push('点赞');
+      if (/(转发|分享)/.test(t)) acts.push('转发');
+      if (/(下期|下回|下次|下一期|再见|拜拜)/.test(t)) acts.push('下期见');
+      if (acts.length === 1) acts.push('下期见');
+      return { host, acts };
+    }
+
     // 单句 -> 镜头卡片（自动匹配类型）
     function shotForSentence(s) {
       if (creatorSignoff(s)) return '::DROP::';
@@ -2442,7 +3264,8 @@
       const nums = extractNumbers(sNoYear);
       const counts = {};
       nums.forEach(n => counts[n.unit] = (counts[n.unit] || 0) + 1);
-      const primaryUnit = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+      const nonEmptyUnits = Object.keys(counts).filter(k => k !== '');
+      const primaryUnit = (nonEmptyUnits.length ? nonEmptyUnits : Object.keys(counts)).sort((a, b) => counts[b] - counts[a])[0];
       const series = primaryUnit === undefined ? [] : nums.filter(n => n.unit === primaryUnit);
       const dur = durForText(s, 2.5);
       const title = refineTitle(s);
@@ -2496,12 +3319,15 @@
           // 标题取冒号引导语或首个分句，聚焦主体而非整句口播
           const tTitle = lead ? clampTitle(lead[1].replace(/(是|有|如下|包括)$/, ''), 12)
             : clampTitle((s.split(/[，,]/)[0] || s).replace(/[。！？；：、]/g, ''), 12);
-          return { type: 'tags', title: hint ? hint[0] : tTitle, text: s, labels: tags, duration: Math.max(dur, 3.5) };
+          const titleTxt = hint ? hint[0] : tTitle;
+          // 保留全部要点，一条不删；仅当标题与任一要点重复时，把标题换成"N 个要点"避免"标题=要点"，杜绝 1 条点的空洞卡
+          const noDupTitle = !String(titleTxt || '').trim() || tags.some(x => String(x).trim() === String(titleTxt).trim());
+          return { type: 'tags', title: noDupTitle ? tags.length + ' 个要点' : titleTxt, text: s, labels: tags, duration: Math.max(dur, 3.5) };
         }
       }
       // 5) 图表：≥3 个同单位数据（强趋势词+时间轴 → 折线；横向多项 → 排行榜）
       if (series.length >= 3) {
-        const strongTrend = /趋势|走势|逐月|逐年|月度|季度|同比|环比/.test(s);
+        const strongTrend = new RegExp(FIN_TREND_STRONG).test(s);
         if (strongTrend && (years.length >= 2 || /逐月|逐年|月度|季度|同比|环比/.test(s))) {
           return { type: 'line', title, text: s, nums: series.slice(0, 5).map(n => n.num), unit: primaryUnit,
             labels: labelsForSeries(sNoYear, primaryUnit, Math.min(series.length, 5)), duration: Math.max(dur, 4.5) };
@@ -2511,16 +3337,28 @@
       }
       // 6) 双数据 -> 条形
       if (series.length === 2) {
+        // 每行方向独立判定（根因修复）：回落/下滑/负/亏等词把该行数值编码为负，涨/增保持正。
+        // 这样条形图不被"整卡趋势"（如"利润跌"把整卡压成 down）污染，收入与利润各按自身涨跌着色
+        const directed = series.map(n => barPointNum(sNoYear, n));
         let labels = labelsForSeries(sNoYear, primaryUnit, 2);
-        if (labels.some(l => l.replace(/第\d+项/, '').length < 2 || /[看比的了在到从与而]/.test(l))) {
-          // 标签提取失败：尝试时间对词，否则用"本期/上期"
-          const tp2 = /(去年|上年|同期|上月|以前|过去).{0,14}?(今年|现在|目前|如今|当下)/.exec(s);
-          if (tp2) labels = [tp2[2], tp2[1]];
-          else if (years.length >= 2) labels = years.slice(0, 2);
-          else labels = ['同比', '环比'];
+        // 语义标签：数字前是"占…%"→"占比"、"涨/增…%"→"涨幅"、"跌/降…%"→"降幅"。
+        // 这样"占53%，还涨了13.67%"的两行标签是"占比/涨幅"，而不是把口播句或"同比/环比"占位搬过来
+        labels = semBarLabels(sNoYear, directed, labels);
+        // 仅当出现单字（"占""涨"这类动词被剥剩 1 字）才回退；不做虚词字宽判，
+        // 避免把含"比/而"的合法实体名（比亚迪、反而…）误判成垃圾标签而丢失
+        if (labels.some(l => l.replace(/第\d+项/, '').length < 2)) {
+          // 标签提取失败：尝试按数据点回捞干净指标词，否则用时间对词/本期上期
+          const dp = extractDataPoints(sNoYear).filter(p => p.unit === primaryUnit).map(p => p.label).filter(Boolean);
+          if (dp.length >= 2 && dp.every(l => l.length >= 2)) labels = dp.slice(0, 2);
+          else {
+            const tp2 = /(去年|上年|同期|上月|以前|过去).{0,14}?(今年|现在|目前|如今|当下)/.exec(s);
+            if (tp2) labels = [tp2[2], tp2[1]];
+            else if (years.length >= 2) labels = years.slice(0, 2);
+            else labels = ['同比', '环比'];
+          }
         }
-        return { type: 'bar', title, text: s, nums: series.map(n => n.num), unit: primaryUnit || '',
-          labels, duration: Math.max(dur, 4) };
+        return assignBarTitle({ type: 'bar', title, text: s, nums: directed.map(e => e.num), dirs: directed.map(e => e.dir || 'flat'),
+          unit: primaryUnit || '', labels, duration: Math.max(dur, 4) });
       }
       // 6.5) 变化份额句：句子里只有"砍掉/少了/涨了 X成、X分之X、一半"这类变化量、又没有现成百分比时，
       // 升格为变化仪表盘（跌红涨绿）——不能拿铺垫旧数（"前年还赚着100亿"）冒充当前主数据，否则大数字和字幕互相打架
@@ -2528,7 +3366,7 @@
         const cs = changeShareOf(s);
         if (cs) {
           const rT2 = refineTitle(s);
-          const label2 = (rT2.length >= 2 && !/[\d%％]/.test(rT2)) ? rT2 : metricLabelOf(s);
+          const label2 = prependTime((rT2.length >= 2 && !/[\d%％]/.test(rT2)) ? rT2 : metricLabelOf(s), s);
           if (label2.replace(/(下滑|上涨|下降|增长)/g, '').length >= 2) {
             return { type: 'gauge', label: label2, text: s, kpi: { text: cs.num + '%', num: cs.num, unit: '%' }, dir: cs.dir, duration: Math.max(dur, 4) };
           }
@@ -2541,9 +3379,29 @@
           const pre = i > 0 ? sNoYear.slice(Math.max(0, i - 5), i) : '';
           return !/(同比|环比|增长|下降|下滑|上涨|涨幅|跌幅|增速|增幅)$/.test(pre);
         });
-        const k = pickKpi(coreNums.length ? coreNums : nums);
+        let k = pickKpi(coreNums.length ? coreNums : nums);
         const rT = refineTitle(s);
-        const label = (rT.length >= 2 && !/[\d%％]/.test(rT)) ? rT : metricLabelOf(s);
+        // 标题可用性判断：允许"M2/CPI"这类"字母+数字"指标缩写，先剥掉缩写再看是否真含数据串（避免"M2增速回升"被当成数据而误弃标题）
+        const rTClean = String(rT || '').replace(/[A-Za-z]+\d+/g, '');
+        const label = prependTime((rT.length >= 2 && !/%％/.test(rT) && !/\d/.test(rTClean)) ? rT : metricLabelOf(s), s);
+        // 指标绝对数优先于涨跌幅（根因R3）："收入4.04亿美元，涨了27.3%"同时含指标绝对数与涨跌幅%时，
+        // 主数字=指标绝对数（带单位），% 作为涨跌方向徽章，不再被 % 抢走主位
+        if (/%|％/.test(k.unit || '')) {
+          // 指标绝对数候选：非%带单位，且其前 12 字内含指标词（"现金流…上半年48亿"→48亿，"收入4.04亿美元"→4.04亿）。
+          // 排除"股"单位——"10股派13块3"是分红方案，不是主指标，不能抢走"现金流48亿"的主数字位；
+          // 排除紧邻涨跌幅修饰词的数字（"净利率15%，同比跌了3个百分点"→3个百分点是跌幅，不抢15%主位）。
+          // 多个候选时按文本位置取最靠前的（用户要求"以靠前的数据为主"），避免靠后的分红方案顶替主指标
+          const anchor = coreNums.filter(n => {
+            const nu = n.unit || '';
+            if (/%|％/.test(nu) || nu === '' || nu.indexOf('股') >= 0) return false;
+            const ii = sNoYear.indexOf(n.text);
+            if (ii < 0) return false;
+            const win = sNoYear.slice(Math.max(0, ii - 12), ii);
+            if (/(同比|环比|跌|涨|降|升|下滑|回落|收窄|增长|下降|上涨|减少|减少)/.test(win)) return false;
+            return FIN_METRICS.some(w => win.indexOf(w) >= 0);
+          }).sort((a, b) => sNoYear.indexOf(a.text) - sNoYear.indexOf(b.text));
+          if (anchor.length) k = anchor[0];
+        }
         // 负百分比不进仪表盘（指针会被钳到 0），改走 KPI + 大号减号徽章
         if (/%|％/.test(k.unit || '') && Number(k.num) > 0) {
           return { type: 'gauge', label, text: s, kpi: k, dir: trendDir(s), duration: Math.max(dur, 4) };
@@ -2608,6 +3466,7 @@
       let enumBuf = [];
       let enumLead = '';
       let pendLead = []; // 待并入下一张数据卡的纯叙述句（引子）
+      let endingSignoff = ''; // 结尾创作口播（"我是谁谁谁/关注我/下期见"），仅末句识别为收尾卡
       const attachLead = (shot) => {
         if (pendLead.length && shot) {
           shot.text = pendLead.join('，') + '，' + (shot.text || '');
@@ -2622,32 +3481,36 @@
         if (!shot) return shot;
         if (shot.type !== 'gauge' && shot.type !== 'kpi') return shot;
         const low = String(shot.label || '');
-        if (low && low.length >= 2 && !/(降了|砍|缩|跌|同比|环比|四分之|这个数|那个数|还在|又|反而)/.test(low)) return shot;
+        // "关键数据"是默认回退值，说明正文有真实指标词没被提取出来（如"分红"），必须重新提取；
+        // 其余已成型的有效标题（长≥2且非垃圾句式）跳过
+        if (low && low.length >= 2 && low !== '关键数据' && !/(降了|砍|缩|跌|同比|环比|四分之|这个数|那个数|还在|又|反而)/.test(low)) return shot;
         const full = String(shot.text || '');
-        for (const w of ['合同负债', '资产负债率', '应收账款', '预收款', '市占率', '渗透率', '净利率', '毛利率', '净利润', '净利',
-          '库存', '存货', '订单', '渠道', '负债', '营收', '利润', '销售额', '占比', '份额', '规模', '销量', '产量', '客单价', '市值', '股价']) {
-          if (full.indexOf(w) >= 0) { shot.label = w; return shot; }
+        let nw = '';
+        for (const w of FIN_METRICS) {
+          if (full.indexOf(w) >= 0) { nw = w; break; }
         }
+        if (nw) { shot.label = prependTime(nw, full); return shot; }
         const m2 = metricLabelOf(full);
-        if (m2 && m2 !== '关键数据') shot.label = m2;
+        if (m2 && m2 !== '关键数据') shot.label = prependTime(m2, full);
         return shot;
       };
       const flushEnum = () => {
         if (!enumBuf.length) return;
         const joined = enumBuf.join(' ');
+        const title = enumLead || enumBuf.length + ' 个要点';
+        const labels = enumBuf.map(x => {
+          let v = x;
+          for (let i = 0; i < 2; i++) v = v.replace(/^[^，,：:]{0,8}[，,：:]\s*/, '');
+          return v.replace(/[。！？；;，,]\s*$/, '');
+        }).filter(x => x.length >= 2).slice(0, 5);
         shots.push(attachLead({ type: 'tags',
-          title: enumLead || enumBuf.length + ' 个要点',
-          text: joined,
-          labels: enumBuf.map(x => {
-            let v = x;
-            for (let i = 0; i < 2; i++) v = v.replace(/^[^，,：:]{0,8}[，,：:]\s*/, '');
-            return v.replace(/[。！？；;，,]\s*$/, '');
-          }).filter(x => x.length >= 2).slice(0, 5),
+          title, text: joined,
+          labels: labels.length ? labels : ['关键要点'],
           duration: Math.max(durForText(joined, 3), 3.5) }));
         enumBuf = [];
         enumLead = '';
       };
-      sentences.forEach(s => {
+      sentences.forEach((s, si) => {
         const bare = s.replace(/[。！？!?；;\s]/g, '');
         const isEnum = (enumBuf.length ? ENUM_NEXT : ENUM_START).test(s);
         if (isEnum && bare.length <= 45) { enumBuf.push(s); return; }
@@ -2658,6 +3521,11 @@
           enumBuf.push(s); return;
         }
         flushEnum();
+        // 结尾创作口播（"我是谁谁谁/关注我/下期见"）：仅末句识别为收尾卡，其余位置仍按原逻辑丢弃
+        if (si === sentences.length - 1 && isEndingSignoff(s)) {
+          endingSignoff = s;
+          return;
+        }
         const shot = shotForSentence(s);
         if (shot === '::DROP::') return; // 创作口播：不成卡、也不并入叙事引子
         if (!shot) { pendLead.push(s.replace(/[。！？!?；;\s]+$/, '')); return; }
@@ -2671,6 +3539,11 @@
         const type = narrativeTension(condensed) ? 'quote' : 'title';
         shots.push({ type, label: condensed, text: condensed, duration: durForText(condensed, 3) });
       }
+      // 结尾口播收尾卡：仅末句"我是谁谁谁/关注我/下期见"作为最后一张卡
+      if (endingSignoff) {
+        const so = parseSignoff(endingSignoff);
+        shots.push({ type: 'signoff', text: endingSignoff, host: so.host, acts: so.acts, duration: 4.2 });
+      }
       // 每卡自适应配色（相邻不重色）
       // 兜底过滤：即便某句口播漏过 creatorSignoff，这里也会把标成"我是/陆新/下期/欢迎/评论区"之类口播词的 KPI/仪表盘卡剔除，
       // 保证任何"裸数字+断标题"的收尾口播卡都不可能存活到渲染
@@ -2681,6 +3554,86 @@
       });
       shots.forEach((c, i) => { c.theme = autoThemeFor(c, i > 0 ? shots[i - 1].theme : null); });
       return shots;
+    }
+
+    // ================================
+    //  张数对齐：用户填 N 张就必须出 N 张
+    //  N 小于现有张数 → 截断；N 大于现有张数 → 把"多数据点图卡"（bar/rank/line）
+    //  拆成单点 KPI（每个数字都来自原文，不是造假也不是复制整段文案）；
+    //  拆无可拆就保留真实上限并如实提示，绝不硬凑垃圾卡
+    // ================================
+    function segForNum(text, numVal) {
+      const key = String(numVal).replace(/[^\d.]/g, '');
+      if (!key) return '';
+      const segs = String(text || '').split(/[，,；;。！？!?]/).map(x => x.trim()).filter(Boolean);
+      const hits = segs.filter(x => x.replace(/[^\d.]/g, '').indexOf(key) >= 0);
+      if (!hits.length) return '';
+      return hits.sort((a, b) => a.length - b.length)[0].slice(0, 26);
+    }
+    function splitDataCard(card) {
+      if (!card || !Array.isArray(card.labels) || !Array.isArray(card.nums)) return null;
+      if (card.type !== 'bar' && card.type !== 'rank' && card.type !== 'line') return null;
+      const n = Math.min(card.labels.length, card.nums.length);
+      if (n < 2) return null;
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const num = Number(card.nums[i]);
+        const title = String(card.labels[i] || '').trim();
+        if (!Number.isFinite(num) || !title) continue;
+        const unit = card.unit || '';
+        const seg = segForNum(card.text, card.nums[i]) || String(card.text || '');
+        out.push({
+          type: 'kpi', label: title, title, text: seg,
+          kpi: { text: String(Math.abs(num)) + unit, num: num, unit: unit },
+          dir: num < 0 ? 'down' : (num > 0 ? 'up' : 'flat'),
+          duration: Math.max(3, durForText(seg, 3))
+        });
+      }
+      return out.length >= 2 ? out : null;
+    }
+    function expandCardsTo(list, want) {
+      const target = Math.floor(Number(want) || 0);
+      if (target <= 0) return list;
+      let out = list.slice();
+      if (out.length > target) return out.slice(0, target);
+      let guard = 0;
+      while (out.length < target && guard++ < 60) {
+        let pick = -1, parts = null;
+        for (let i = out.length - 1; i >= 0; i--) {
+          const ps = splitDataCard(out[i]);
+          if (ps) { pick = i; parts = ps; break; }
+        }
+        if (pick < 0 || !parts) break;
+        out.splice(pick, 1, ...parts);
+      }
+      out = out.slice(0, target);
+      out.forEach((c, i) => { if (!c.theme) c.theme = autoThemeFor(c, i > 0 ? out[i - 1].theme : null); });
+      return out;
+    }
+    // 免费模型（glm-4-flash）经常少给卡：用本地规则补足到用户指定张数，
+    // 以"数值集合"去重，同一数据点绝不重复出两张卡
+    function numsOfCard(c) {
+      if (!c) return [];
+      if (c.kpi && c.kpi.num != null && c.kpi.num !== '') return [String(Math.abs(Number(c.kpi.num)) || c.kpi.num)];
+      if (Array.isArray(c.nums) && c.nums.length) return c.nums.map(n => String(Math.abs(Number(n)) || n));
+      if (c.left && c.right) return [String(Math.abs(Number(c.left.value))), String(Math.abs(Number(c.right.value)))];
+      return [];
+    }
+    function fillUpWithLocal(aiCards, localCards, want) {
+      const target = Math.floor(Number(want) || 0);
+      const out = aiCards.slice();
+      if (!target || out.length >= target) return out;
+      const seen = new Set();
+      aiCards.forEach(c => numsOfCard(c).forEach(v => seen.add(v)));
+      for (const c of localCards) {
+        if (out.length >= target) break;
+        const ns = numsOfCard(c);
+        // 数值已被 AI 卡覆盖 → 同一数据点，跳过
+        if (ns.length && ns.every(v => seen.has(v))) continue;
+        ns.forEach(v => seen.add(v));
+        out.push(c);
+      }
+      return out;
     }
 
     // ================================
@@ -2702,6 +3655,8 @@
           return renderVS(card);
         case 'quote':
           return renderQuote(card);
+        case 'signoff':
+          return renderSignoff(card);
         case 'timeline':
           return renderTimelineCard(card);
         case 'tags':
@@ -2841,6 +3796,7 @@
       if (c.type === 'line' || c.type === 'timeline') return 5;
       if (c.type === 'bar' || c.type === 'kpi' || c.type === 'rank' || c.type === 'vs' || c.type === 'gauge') return 4;
       if (c.type === 'quote' || c.type === 'tags') return 3.5;
+      if (c.type === 'signoff') return 4;
       return 3;
     }
 
@@ -2978,6 +3934,7 @@
         const nums = card.nums || [],
           labels = card.labels || [];
         html += `<div class="edit-row"><label>单位</label><input type="text" id="editUnit" value="${card.unit}"></div>`;
+        html += `<div class="edit-row"><label>方向</label><select id="editDir"><option value="up" ${card.dir==='up'?'selected':''}>上涨</option><option value="down" ${card.dir==='down'?'selected':''}>下跌</option><option value="flat" ${card.dir==='flat'?'selected':''}>持平</option></select><span style="color:var(--sub);font-size:12px;">条卡逐条按标签判断</span></div>`;
         html += `<div class="edit-row" style="justify-content:space-between;"><label>数据点</label>
           <span style="display:flex;gap:6px;">
             <button type="button" class="btn btn-sm" id="addPointBtn" title="添加数据点">＋</button>
@@ -3068,6 +4025,10 @@
       } else if (chartTypes.includes(card.type)) {
         document.getElementById('editUnit').addEventListener('input', function() {
           card.unit = this.value;
+          refreshPreview();
+        });
+        document.getElementById('editDir').addEventListener('change', function() {
+          card.dir = this.value;
           refreshPreview();
         });
         document.querySelectorAll('.editNum').forEach(inp => {
@@ -3174,15 +4135,15 @@
         img.src = url;
       });
     }
-    // 导出完成提示条
-    function showToast(msg) {
+    // 导出完成提示条（dur 可选：错误类提示停留更久，避免用户没看到"AI 已降级"）
+    function showToast(msg, dur) {
       const el = document.getElementById('exportToast');
       if (!el) return;
       el.textContent = msg;
       el.style.opacity = '1';
       el.style.transform = 'translateX(-50%) translateY(0)';
       clearTimeout(el._t);
-      el._t = setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(-50%) translateY(20px)'; }, 3600);
+      el._t = setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(-50%) translateY(20px)'; }, Number(dur) || 3600);
     }
     // 通过本地服务器保存到导出目录（D:\下载，固定位置，用户一定能找到）
     async function serverSave(blob, defaultName) {
@@ -3502,7 +4463,8 @@
     }
     async function recordCardVideoWC(opts) {
       const card = opts.card;
-      const dur = Math.max(1, cardDuration(card));
+      // opts.duration 覆盖：视频合成时叠加素材需与口播等长，而不是卡片自身时长
+      const dur = Math.max(1, Number(opts.duration) > 0 ? Number(opts.duration) : cardDuration(card));
       const fps = 30;
       const total = Math.max(1, Math.ceil(dur * fps));
       const btn = document.getElementById(opts.btnId);
@@ -3540,8 +4502,9 @@
       const fname = opts.fname;
       const loadImage = k => Promise.race([
         new Promise((res, rej) => {
+          // opts.svgAt：多卡时间轴合成时逐帧返回该时刻对应卡片的 SVG；否则沿用单卡固定 SVG 按时间平移
           const T = (k / fps).toFixed(4);
-          const str = '<?xml version="1.0" encoding="UTF-8"?>\n' + shiftSvgTime(svgBase, T);
+          const str = '<?xml version="1.0" encoding="UTF-8"?>\n' + (opts.svgAt ? opts.svgAt(k) : shiftSvgTime(svgBase, T));
           urls[k] = URL.createObjectURL(new Blob([str], { type: 'image/svg+xml;charset=utf-8' }));
           const img = new Image();
           img.onload = () => res(img);
@@ -3629,6 +4592,7 @@
         cleanup();
       } catch (e) {
         cleanup();
+        if (opts.collect) throw e; // 收集模式（批量导出/视频合成）由调用方统一处理错误
         alert('视频导出失败：' + (e && e.message ? e.message : e));
       }
     }
@@ -3697,6 +4661,150 @@
       const mime = pickVideoMime();
       if (!mime) { alert('当前浏览器不支持视频编码，请使用新版 Chrome / Edge。'); return; }
       await recordCardVideo({ ...opts, mime });
+    }
+
+    // ================================
+    //  导入口播视频 → 卡片叠加 → 直接出片（免剪映）
+    //  浏览器只负责"出叠加素材"：把键控底裸动效渲染成与口播等长的一条 MP4；
+    //  再由 server 用本机 ffmpeg 抠像(chromakey)叠加(overlay)，音轨 -c:a copy 原样复用
+    // ================================
+    let compVideo = null; // { file, url, duration, w, h }
+
+    function compInfo(msg, color) {
+      const el = document.getElementById('compInfo');
+      if (el) { el.textContent = msg; el.style.color = color || 'var(--sub)'; }
+    }
+
+    // 读本地视频元数据（只看 metadata，不整片解码）
+    function probeVideoFile(file) {
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const v = document.createElement('video');
+        v.preload = 'metadata';
+        v.muted = true;
+        v.onloadedmetadata = () => {
+          if (!v.duration || !isFinite(v.duration)) { URL.revokeObjectURL(url); reject(new Error('无法读取视频时长')); return; }
+          resolve({ file, url, duration: v.duration, w: v.videoWidth, h: v.videoHeight });
+        };
+        v.onerror = () => { URL.revokeObjectURL(url); reject(new Error('格式不受支持，请用 MP4(H.264)')); };
+        v.src = url;
+      });
+    }
+
+    // 裸动效 SVG：省背景/面板/页眉/角标（键控底素材专用，与 exportGreenVideo 同一渲染开关）
+    function renderBareCard(c) {
+      const ps = transparentShell, pb = bareShell;
+      transparentShell = true; bareShell = true;
+      const svg = renderCard(c);
+      transparentShell = ps; bareShell = pb;
+      return svg;
+    }
+
+    // 键控色需同时避开所有卡片的主题点缀色（逐卡换色时按单卡判定不够）
+    function pickKeyColorForAll(list) {
+      const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+      const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+      const ts = list.map(c => themeForCard(c));
+      let best = KEY_COLORS[0], bestD = -1;
+      for (const k of KEY_COLORS) {
+        const kc = rgb(k.c);
+        let d = Infinity;
+        for (const t of ts) d = Math.min(d, dist(kc, rgb(t.accent)), dist(kc, rgb(t.accent2)));
+        if (d > bestD) { bestD = d; best = k; }
+      }
+      return best;
+    }
+
+    // 逐帧 SVG 提供器：按时间轴决定该帧显示哪张卡，并把该卡动效从它出现的时刻重新计时
+    function makeTimelineSvgAt(segs) {
+      const EMPTY = `<svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS.w}" height="${CANVAS.h}" viewBox="0 0 ${CANVAS.w} ${CANVAS.h}"></svg>`;
+      return k => {
+        const t = k / 30; // 与 recordCardVideoWC 内部 fps 一致
+        const seg = segs.find(s => t >= s.start && t < s.end);
+        return seg ? shiftSvgTime(seg.svg, (t - seg.start).toFixed(4)) : EMPTY;
+      };
+    }
+
+    async function composeWithVideo() {
+      if (!compVideo) { alert('请先选择口播视频'); return; }
+      if (!cards.length) { alert('请先生成卡片'); return; }
+      if (videoRecording) { alert('正在导出其他视频，请稍候再试'); return; }
+      if (!('VideoEncoder' in window)) { alert('当前浏览器不支持视频编码，请用新版 Chrome / Edge 打开工作台。'); return; }
+
+      const btnRun = document.getElementById('compRunBtn');
+      const btnPick = document.getElementById('compPickBtn');
+      const startAt = Math.max(0, Number(document.getElementById('compStart').value) || 0);
+      const keep = btnRun.textContent;
+      const wasAuto = autoPlay; // batch 模式不会自动恢复轮播，需自己收尾
+      btnRun.disabled = true; btnPick.disabled = true;
+
+      // 时间轴：起始秒 S 之后按各卡时长依次铺开，超出视频时长即截断
+      const segs = [];
+      let cur = startAt;
+      for (const c of cards) {
+        if (cur >= compVideo.duration) break;
+        const end = Math.min(compVideo.duration, cur + cardDuration(c));
+        segs.push({ card: c, svg: renderBareCard(c), start: cur, end });
+        cur = end;
+      }
+      if (!segs.length) {
+        btnRun.disabled = false; btnPick.disabled = false;
+        alert('起始秒 ' + startAt + 's 已超过视频时长 ' + compVideo.duration.toFixed(1) + 's，没有卡片可显示');
+        return;
+      }
+
+      const key = pickKeyColorForAll(cards);
+      try {
+        compInfo('① 渲染叠加素材（实时约 ' + compVideo.duration.toFixed(1) + 's）…', 'var(--txt)');
+        let overlayBlob = null;
+        await recordCardVideoWC({
+          card: cards[0],
+          svgBase: segs[0].svg,
+          bg: key.c,
+          duration: compVideo.duration, // 与口播等长：起始秒前填纯键控色（叠加后即透明）
+          svgAt: makeTimelineSvgAt(segs),
+          btnId: 'compRunBtn',
+          btnLabel: keep,
+          fname: 'overlay.mp4',
+          collect: true, batch: true,
+          onCollect: b => { overlayBlob = b; }
+        });
+        if (!overlayBlob) throw new Error('叠加素材渲染失败');
+
+        compInfo('② 上传素材…', 'var(--txt)');
+        const up = async (blob, name) => {
+          const ext = (String(name).split('.').pop() || 'mp4').replace(/[^\w]/g, '') || 'mp4';
+          const r = await fetch('/api/upload?ext=.' + ext, { method: 'POST', body: blob });
+          const j = await r.json();
+          if (!j.ok) throw new Error(j.error || '上传失败');
+          return j.token;
+        };
+        const overlayToken = await up(overlayBlob, 'overlay.mp4');
+        const videoToken = await up(compVideo.file, compVideo.file.name);
+
+        compInfo('③ ffmpeg 抠像叠加并复用音轨…', 'var(--txt)');
+        const rc = await fetch('/api/composite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoToken, overlayToken,
+            width: CANVAS.w, height: CANVAS.h,
+            keyColor: key.c.replace('#', '0x'),
+            filename: 'card_成片_' + Date.now() + '.mp4'
+          })
+        });
+        const rj = await rc.json();
+        if (!rj.ok) throw new Error(rj.error || '合成失败');
+        compInfo('✅ 已生成：' + rj.path, 'var(--accent)');
+        showToast('✅ 成片已保存：' + rj.path);
+      } catch (e) {
+        compInfo('合成失败：' + (e && e.message ? e.message : e), '#ff6d6d');
+        alert('合成失败：' + (e && e.message ? e.message : e));
+      } finally {
+        btnRun.disabled = false; btnPick.disabled = false;
+        btnRun.textContent = keep;
+        if (wasAuto) startAutoTimer();
+      }
     }
 
     // ================================
@@ -3895,17 +5003,254 @@
       saveState();
     }
 
-    function generate() {
-      const text = document.getElementById('textInput').value.trim();
-      if (!text) { alert('请粘贴文案'); return; }
-      applyNewCards(parseShots(text));
+    // ================================
+    //  AI 解析：大模型只做"文案 → 结构化卡片 JSON"，渲染层不动
+    //  三道护栏：① schema 归一化 ② 数字溯源（禁止编造）③ 方向交叉校验（规则优先）
+    //  失败一律降级到 parseShots()，保证功能可用
+    // ================================
+    function normalizeUnit(u) {
+      let s = String(u || '').trim();
+      s = s.replace(/^个/, '').replace(/^多(亿|万)/, '$1');       // "个亿"/"多亿" → "亿"
+      s = s.replace(/亿元$/, '亿').replace(/万元$/, '万');          // "亿元" → "亿"
+      if (/股/.test(s)) return '';                                 // "元/10股"这类分红单位不是有效指标单位
+      return s;
     }
 
-    function generateShots() {
+    // 数字解析：模型常给 "10%"、"1700到1750"（区间）、"120多亿" 这类非纯数字字符串。
+    // 统一取其中第一个数字（区间取起始值），避免核心数据卡被误杀。
+    // 注意 Number('') === 0 会让空值伪装成 0，必须先判空串。
+    function aiNum(v, fallbackText) {
+      const s0 = v == null ? '' : String(v).trim();
+      if (s0 && isFinite(Number(s0))) return Number(s0);
+      const m = s0.match(/-?\d+(?:\.\d+)?/);
+      if (m) return Number(m[0]);
+      const m2 = String(fallbackText || '').match(/-?\d+(?:\.\d+)?/);
+      return m2 ? Number(m2[0]) : NaN;
+    }
+
+    // 护栏 2：数字必须逐字出现在原文，否则弃卡（财经内容不允许编数字）
+    function normalizeKpi(kpi, script) {
+      if (!kpi) return null;
+      const num = aiNum(kpi.num, kpi.text);
+      if (!isFinite(num)) return null;
+      const kt = String(kpi.text || '').trim();
+      const inSrc = (kt && script.indexOf(kt) >= 0) || script.indexOf(String(num)) >= 0;
+      if (!inSrc) return null;
+      return { text: kt || String(num), num: num, unit: normalizeUnit(kpi.unit) };
+    }
+
+    // 护栏 3：kpi/gauge 的方向——① 有明确"持平"词 → flat；② 规则读到涨跌词 → 用规则
+    // （该词表已修多轮，比模型稳）；③ 规则无涨跌信号 → 采用模型判断，不再一律压成 flat。
+    // 与 refreshCardDir 对旧卡的重算保持一致，保证"刚生成"与"刷新后"显示同一方向。
+    function crossCheckDir(llmDir, ctx) {
+      // 有明确"持平"词 → 一律 flat（防上下文涨跌词污染，如"基本持平——跌声一片里就它是正的"）
+      if (new RegExp(FIN_TREND_FLAT).test(ctx)) return 'flat';
+      const rd = trendDir(ctx);
+      if (rd === 'up' || rd === 'down') return rd; // 规则读到明确涨跌词，优先（词表已修多轮）
+      // 规则无涨跌信号时 trendDir 会默认回 flat，但那不等于"持平"；
+      // 此时采用模型判断，避免把模型已正确识别出的方向丢掉（如"店里1800多才拿得到"判涨）
+      return (llmDir === 'up' || llmDir === 'down') ? llmDir : 'flat';
+    }
+
+    // 护栏 1：type 缺失时按字段推断
+    function inferCardType(it) {
+      if (it.left || it.right) return 'vs';
+      if (Array.isArray(it.labels) && it.labels.length >= 2) return 'bar';
+      if (it.kpi) return 'kpi';
+      return 'quote';
+    }
+
+    // 没有可用数字的内容点（"缺货加价""考核开瓶率"这类定性/趋势描述）不应被丢弃：
+    // 降级为要点卡(tags)或金句卡(quote)，既有画面可配，又不会展示任何编造的数字
+    // 长句金句卡 → 要点卡：金句卡是逐词渲染，会把"没货"这类词拆断；要点卡按整行展示更连贯。
+    // 但只对"真正的并列枚举"生效，否则满篇都会变成标签卡、bar/line/vs 等卡型全被挤掉
+    // 字幕卡/金句卡必须是"提炼后的短句"，不能整句照抄口播原文（用户反馈"把文案全复制进来了"）：
+    // 超长时取到第一个破折号/逗号为止的关键子句
+    function keyClauseOf(s) {
+      const raw = String(s).replace(/[。！？!?；;]+$/, '').trim();
+      if (raw.length <= 20) return raw;
+      const cut = raw.split(/——|--|—|[，,]/)[0].trim();
+      return cut.length >= 6 ? cut : raw.slice(0, 20);
+    }
+
+    function reclauseToTags(card, text) {
+      const src = String(text).trim();
+      // 只有"真正的并列枚举"才转要点卡：显式编号（第一/第二/一是/二是…）或顿号并列 ≥3 项。
+      // 之前任何长句都转 tags，导致满篇都是标签卡、bar/line/vs 等卡型全被挤掉（用户反馈）
+      const hasEnum = /[一二三四五六七八九]是|第[一二三四五六七八九][,，、]|首先|其次|最后/.test(src)
+        || src.split('、').length >= 3;
+      if (!hasEnum) return false;
+      const labels = src.split(/[；;。！？!?，,、]|——|--|—/)
+        .map(s => s.trim().replace(/^[，,、]+|[，,、]+$/g, '')).filter(s => s.length >= 2);
+      if (labels.length < 2) return false;
+      delete card.kpi; delete card.left; delete card.right;
+      card.type = 'tags';
+      card.labels = labels.slice(0, 5);
+      card.duration = cardDuration(card);
+      return true;
+    }
+
+    function toTextCard(card, it, text) {
+      const labels = Array.isArray(it.labels)
+        ? it.labels.map(x => String(x).trim()).filter(x => x.length >= 2) : [];
+      delete card.kpi; delete card.left; delete card.right;
+      if (labels.length >= 2) {
+        card.type = 'tags';
+        card.labels = labels.slice(0, 5);
+      } else if (!reclauseToTags(card, text)) {
+        card.type = 'quote';
+        card.text = condenseNarrative(text);
+      }
+      card.duration = cardDuration(card);
+      return card;
+    }
+
+    function normalizeLLMCard(it, script) {
+      if (!it || typeof it !== 'object') return null;
+      const type = (typeof it.type === 'string' && TYPE_LABEL[it.type]) ? it.type : inferCardType(it);
+      const text = String(it.text || '').trim();
+      if (!text) return null;
+      // 复用既有文本→卡片结构（渲染层需要的字段），随后用模型给的高层语义覆盖
+      let card;
+      try { card = buildCardFromText(text, type) || { type: type, text: text }; } catch (e) { card = { type: type, text: text }; }
+      card.type = type;
+      const ti = String(it.title || '').trim();
+      if (ti) card.title = ti;
+      // 渲染层（absTrendLayout / renderKPI / renderGauge）顶部标题取的是 card.label，
+      // 而 buildCardFromText 在没有指标词时会把 label 兜底成"关键数据"——必须把模型给的真实
+      // 标题同步进 label，否则每张 KPI/仪表盘头顶都显示"关键数据"（用户明确反馈的问题）
+      if (ti && (type === 'kpi' || type === 'gauge')) card.label = ti;
+      if (type === 'kpi' || type === 'gauge') {
+        const k = normalizeKpi(it.kpi, script);
+        if (k) {
+          card.kpi = k;
+          // 与 refreshCardDir 用同一上下文，保证"刚生成"和"刷新后"方向一致
+          card.dir = crossCheckDir(it.dir, String(card.text || '') + ' ' + String(card.label || '') + ' ' + String(card.title || ''));
+        } else {
+          // 无可用数字（定性内容，或模型编的数字）：降级为要点/金句卡而非丢弃；
+          // 因为不展示数字，编造的数字也不会出现在卡片上
+          return toTextCard(card, it, text);
+        }
+      }
+      // vs 卡：优先采用模型给的 left/right；模型没给时规则兜底会产出断句碎片标签
+      // （如"价一整个假期卡在"/"到"）与 0 值，属肉眼可见错误 → 降级为单值 KPI 或丢弃
+      if (type === 'vs') {
+        const lRaw = it.left, rRaw = it.right;
+        const lv = aiNum(lRaw && lRaw.value, lRaw && lRaw.label);
+        const rv = aiNum(rRaw && rRaw.value, rRaw && rRaw.label);
+        if (lRaw && rRaw && isFinite(lv) && isFinite(rv) && (lv || rv)) {
+          card.left = { label: String(lRaw.label || '甲方'), value: lv, unit: normalizeUnit(lRaw.unit) };
+          card.right = { label: String(rRaw.label || '乙方'), value: rv, unit: normalizeUnit(rRaw.unit) };
+        } else {
+          // 模型没给可用的左右数值：原文有数字就当单值 KPI，否则降级为金句/要点卡（不丢弃）
+          const first = extractNumbers(text)[0];
+          if (first) {
+            card.type = 'kpi';
+            card.kpi = { text: first.text, num: first.num, unit: normalizeUnit(first.unit) };
+            card.dir = crossCheckDir(it.dir, String(card.text || '') + ' ' + String(card.title || ''));
+          } else {
+            return toTextCard(card, it, text);
+          }
+        }
+      }
+      // 模型直接返回 quote 的长句同样转为要点卡，避免逐词渲染把词语拆断
+      if (card.type === 'quote') reclauseToTags(card, text);
+      // 标签卡兜底：模型没给要点、或只给占位词"关键要点"时，按原文分句生成要点；
+      // 切不出要点就降级为字幕卡，绝不展示"关键要点"这类无意义内容（用户反馈"9写什么都不知道"）
+      if (card.type === 'tags') {
+        const ls0 = Array.isArray(card.labels) ? card.labels.map(x => String(x).trim()) : [];
+        const ph = !ls0.length || ls0.every(x => /^关键要点$|^关键数据$|^\d+\s*个要点$/.test(x));
+        if (ph) {
+          const ls = String(text).split(/[；;。！？!?，,、]|——|--|—/)
+            .map(x => x.trim().replace(/^[，,、]+|[，,、]+$/g, '')).filter(x => x.length >= 2);
+          if (ls.length >= 2 && ls.length <= 6) card.labels = ls.slice(0, 5);
+          else { card.type = 'title'; delete card.labels; card.label = keyClauseOf(text); card.text = card.label; }
+        }
+      }
+      // 字幕卡必须是提炼短句，不能整句照抄原文
+      if (card.type === 'title') { const kc = keyClauseOf(String(card.text || text)); card.label = kc; card.text = kc; }
+      card.duration = cardDuration(card);
+      return card;
+    }
+
+    async function parseScriptWithLLM(text, maxCards) {
+      const limit = Number(maxCards) > 0 ? Math.floor(Number(maxCards)) : 0; // 0 = 不限张数
+      const r = await fetch('/api/llm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text, maxCards: limit })
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'AI 解析失败');
+      const out = [];
+      for (const it of (j.cards || [])) {
+        let card = null;
+        try { card = normalizeLLMCard(it, text); } catch (e) { card = null; }
+        if (card) out.push(card);
+        if (limit && out.length >= limit) break;
+      }
+      if (!out.length) throw new Error('AI 未产出有效卡片（数字溯源未通过）');
+      // 纯叙述卡（字幕卡/金句卡）没有数据可视化价值、等于照抄原文：
+      // 有数据卡时全部丢弃；整篇确实没有数据卡时才保留最多 1 张点题卡
+      const isTextOnly = c => c.type === 'title' || c.type === 'quote';
+      const dataCards = out.filter(c => !isTextOnly(c));
+      const finalCards = dataCards.length ? dataCards : out.filter(isTextOnly).slice(0, 1);
+      // 用户指定张数时必须凑齐：先拆多数据点图卡；仍不够再用本地规则按数值去重补齐
+      const expanded = expandCardsTo(finalCards, limit);
+      const filled = fillUpWithLocal(expanded, parseShots(text), limit);
+      return { cards: filled, model: j.model || 'AI' };
+    }
+
+    // 本地规则解析（初始示例用，保证首屏即时，不消耗额度）
+    function generateLocal() {
+      const text = document.getElementById('textInput').value.trim();
+      if (!text) return;
+      const raw = Number((document.getElementById('aiMaxCards') || {}).value);
+      const want = Number.isFinite(raw) ? Math.max(0, Math.min(50, Math.floor(raw))) : 0;
+      applyNewCards(expandCardsTo(parseShots(text), want));
+    }
+
+    // 生成：AI 优先；未勾选/未配置/失败/超时 一律自动降级到本地规则解析
+    async function generateCards(btnId) {
       const text = document.getElementById('textInput').value.trim();
       if (!text) { alert('请粘贴文案'); return; }
-      applyNewCards(parseShots(text));
+      const btn = document.getElementById(btnId);
+      const keep = btn ? btn.textContent : '';
+      const toggle = document.getElementById('aiToggle');
+      const maxEl = document.getElementById('aiMaxCards');
+      const useAI = toggle ? toggle.checked : true;
+      // 0 = 自动：按文案篇幅与内容匹配张数；填正数则按用户指定张数出卡
+      const rawMax = Number(maxEl && maxEl.value);
+      const maxCards = Number.isFinite(rawMax) ? Math.max(0, Math.min(50, Math.floor(rawMax))) : 0;
+      if (btn) { btn.disabled = true; btn.textContent = '🤖 AI 解析中（免费模型较慢，最长 2 分钟）…'; }
+      try {
+        if (useAI) {
+          const res = await parseScriptWithLLM(text, maxCards);
+          applyNewCards(res.cards);
+          showToast('🤖 AI 解析完成 · ' + res.cards.length + ' 张卡' +
+            (maxCards > 0 && res.cards.length < maxCards ? '（文案数据点只够 ' + res.cards.length + ' 张）' : ''));
+          return;
+        }
+        applyNewCards(expandCardsTo(parseShots(text), maxCards));
+        showToast('📐 本地规则解析 · ' + cards.length + ' 张卡');
+      } catch (e) {
+        // 兜底：AI 任何异常都不影响出卡。
+        // 注意：降级路径同样必须尊重用户填写的张数（此前直接 applyNewCards(parseShots(text))，
+        // 用户填 9 张也照样按本地默认张数出卡，看起来像"设置没生效"）
+        const msg = e && e.message ? e.message : String(e);
+        const local = parseShots(text);
+        const picked = expandCardsTo(local, maxCards);
+        applyNewCards(picked);
+        const less = (maxCards > 0 && picked.length < maxCards) ? '（本地规则最多拆出 ' + picked.length + ' 张）' : '';
+        showToast('⚠ AI 不可用：' + msg + ' · 已用本地规则出 ' + picked.length + ' 张' + less, 8000);
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = keep; }
+      }
     }
+
+    function generate() { generateCards('btnGenerate'); }
+
+    function generateShots() { generateCards('btnShots'); }
 
     // 一键清除文案：清空输入框并聚焦，方便直接输入新文案（不清除已生成卡片，点“生成卡片”会自动替换）
     function clearTextInput() {
@@ -3918,9 +5263,24 @@
 
     // 事件绑定
     document.addEventListener('DOMContentLoaded', () => {
+      // 预览端：不读本地存档、不生成示例，进入只读全屏并等待 server 推送状态
+      if (previewMode) {
+        document.getElementById('app').classList.add('fullscreen-mode', 'preview-mode');
+        connectPreviewStream();
+        setTimeout(() => { if (!cards.length) showToast('等待电脑端推送…请确认电脑已打开工作台并生成卡片'); }, 1200);
+        updatePlayhead(0);
+        return;
+      }
       const restored = tryRestore();
       if (!restored) document.getElementById('textInput').value = SAMPLE;
       document.getElementById('textInput').addEventListener('input', saveState);
+      // 张数改动立即存档，避免刷新后丢失
+      const maxInputEl = document.getElementById('aiMaxCards');
+      if (maxInputEl) maxInputEl.addEventListener('input', saveState);
+      // 静态托管（GitHub Pages 等）没有 /api 后端：默认关闭 AI 开关，避免每次生成都先白等一次 404
+      const isLocalHost = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)$/.test(location.hostname);
+      const aiT = document.getElementById('aiToggle');
+      if (aiT && !isLocalHost) { aiT.checked = false; aiT.title = '当前为静态托管（无本地后端），AI 解析不可用，改用本地规则'; }
       document.getElementById('btnGenerate').addEventListener('click', generate);
       document.getElementById('btnClearText').addEventListener('click', clearTextInput);
       document.getElementById('btnSample').addEventListener('click', () => {
@@ -3936,6 +5296,44 @@
       document.getElementById('exportVideoBtn').addEventListener('click', exportCardVideo);
       document.getElementById('exportAllBtn').addEventListener('click', exportAllVideos);
       document.getElementById('exportGreenBtn').addEventListener('click', exportGreenVideo);
+      // 视频合成：选口播视频 → 生成叠加素材 → 交 server + ffmpeg 出片（免剪映）
+      document.getElementById('compPickBtn').addEventListener('click', () => document.getElementById('compVideoFile').click());
+      document.getElementById('compVideoFile').addEventListener('change', async e => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        try {
+          compVideo = await probeVideoFile(f);
+          document.getElementById('compRunBtn').disabled = false;
+          compInfo('已选择：' + f.name + '（' + compVideo.duration.toFixed(1) + 's · ' + compVideo.w + '×' + compVideo.h + ' · ' + (f.size / 1048576).toFixed(1) + 'MB）', 'var(--txt)');
+        } catch (err) {
+          compVideo = null;
+          document.getElementById('compRunBtn').disabled = true;
+          compInfo('读取失败：' + err.message, '#ff6d6d');
+        }
+      });
+      document.getElementById('compRunBtn').addEventListener('click', composeWithVideo);
+      // 手机预览：展示局域网地址（手机连同一 Wi-Fi 打开即实时同步）
+      document.getElementById('mobilePreviewBtn').addEventListener('click', async () => {
+        const modal = document.getElementById('mobileModal');
+        const box = document.getElementById('mobileUrls');
+        modal.style.display = 'flex';
+        box.textContent = '读取中…';
+        try {
+          const j = await (await fetch('/api/lan')).json();
+          const ips = (j.ips || []).map(ip => 'http://' + ip + ':' + j.port + '/?preview=1');
+          box.innerHTML = ips.length ? ips.map(u => '<div>' + esc(u) + '</div>').join('') : '未检测到局域网地址，请确认已连接 Wi-Fi';
+        } catch (e) {
+          // 云端部署没有本地服务，拿不到局域网 IP：给出当前站点地址，并说明实时同步的差异
+          box.innerHTML = '<div>' + esc(location.origin + '/?preview=1') + '</div>' +
+            '<div style="opacity:.7;margin-top:8px;font-size:12px;">云端版：手机可打开此地址；实时同步需要在本机运行工作台。</div>';
+        }
+      });
+      document.getElementById('mobileCloseBtn').addEventListener('click', () => { document.getElementById('mobileModal').style.display = 'none'; });
+      document.getElementById('mobileCopyBtn').addEventListener('click', async () => {
+        const first = (document.getElementById('mobileUrls').textContent || '').trim().split('\n')[0] || '';
+        try { await navigator.clipboard.writeText(first); showToast('✅ 已复制：' + first); }
+        catch (e) { showToast('复制失败，请手动长按选择地址'); }
+      });
       document.getElementById('btnShots').addEventListener('click', generateShots);
       document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
       document.getElementById('exitFullscreenBtn').addEventListener('click', exitFullscreen);
@@ -3988,6 +5386,10 @@
           }
           return;
         }
+        // 正在输入框中编辑时，方向键必须留给光标移动，绝不能抢去翻卡片
+        // （原先无此保护，导致数字框/文案框里按 ←/→ 会直接切卡，无法正常编辑）
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
         if (e.key === 'ArrowLeft') showCard(activeIndex - 1);
         else if (e.key === 'ArrowRight') showCard(activeIndex + 1);
       });
@@ -3997,7 +5399,7 @@
         renderList();
         showCard(activeIndex);
       } else {
-        generate();
+        generateLocal(); // 首屏用本地规则即时出卡，不消耗 AI 额度、不等待
       }
       if (restoredRatio === '16:9') setRatio('16:9');
       updatePlayhead(0);
