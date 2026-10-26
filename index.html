@@ -3701,6 +3701,54 @@
       return out.slice(0, target);
     }
 
+    // 把原文切成句子并记录字符位置（。！？；换行）
+    function splitScriptSentences(src) {
+      const out = [];
+      const re = /[^。！？；\n]+[。！？；\n]?/g;
+      let m;
+      while ((m = re.exec(String(src || ''))) !== null) {
+        const t = m[0].trim();
+        if (t) out.push({ start: m.index, end: m.index + m[0].length, text: t });
+      }
+      return out;
+    }
+    const normForMatch = s => String(s || '').replace(/[\s，,。.、！？?；;：:—\-…“”"'‘’（）()《》]/g, '');
+
+    // AI 只负责"挑出哪些句子值得做卡"，卡型/数值由规则按整句重新判定：
+    // 这样同一句里的多个主体/多个数值会变成 bar/rank/vs（而不是被模型拆成一堆一模一样的小 KPI），
+    // 同时天然消除"同一句出两三张卡"的重复问题。
+    function rebuildCardsBySentence(cardsIn, script) {
+      const sents = splitScriptSentences(script);
+      if (!sents.length) return cardsIn;
+      const normSents = sents.map(s => normForMatch(s.text));
+      const used = new Set();
+      const out = [];
+      for (const c of cardsIn) {
+        const nt = normForMatch(c.text);
+        if (!nt) continue;
+        let si = -1;
+        for (let i = 0; i < normSents.length; i++) {
+          if (normSents[i].indexOf(nt) >= 0 || nt.indexOf(normSents[i]) >= 0) { si = i; break; }
+        }
+        if (si < 0) { out.push(c); continue; }   // 句子定位不到，保留原卡
+        if (used.has(si)) continue;              // 同一句只保留一张
+        used.add(si);
+        let rule = null;
+        try { rule = shotForSentence(sents[si].text); } catch (e) { rule = null; }
+        if (rule && rule !== '::DROP::' && rule.type && rule.type !== 'quote' && rule.type !== 'title') {
+          // 用模型给的标题覆盖规则标题（标签仍按规则），保留模型对"这句讲什么"的理解
+          if (c.title) { rule.title = c.title; if (rule.type === 'kpi' || rule.type === 'gauge') rule.label = c.title; }
+          rule.__pos = sents[si].start;
+          out.push(rule);
+        } else {
+          c.__pos = sents[si].start;
+          out.push(c);
+        }
+      }
+      out.sort((a, b) => (a.__pos == null ? 1e9 : a.__pos) - (b.__pos == null ? 1e9 : b.__pos));
+      return out;
+    }
+
     // ================================
     //  渲染与切换
     // ================================
@@ -4737,6 +4785,28 @@
     //  再由 server 用本机 ffmpeg 抠像(chromakey)叠加(overlay)，音轨 -c:a copy 原样复用
     // ================================
     let compVideo = null; // { file, url, duration, w, h }
+    // 语音停顿点缓存：同一个视频只分析一次（上传 → ffmpeg silencedetect）
+    let compPauses = null, compPausesKey = '';
+    async function ensureCompPauses() {
+      if (!compVideo) return null;
+      const key = compVideo.url;
+      if (compPauses && compPausesKey === key) return compPauses;
+      try {
+        const ur = await fetch('/api/upload?ext=.mp4', { method: 'POST', body: compVideo.file });
+        const uj = await ur.json();
+        if (!uj || !uj.ok) return null;
+        const ar = await fetch('/api/align', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: uj.token })
+        });
+        const aj = await ar.json();
+        if (!aj || !aj.ok) return null;
+        compPauses = Array.isArray(aj.pauses) ? aj.pauses : [];
+        compPausesKey = key;
+        return compPauses;
+      } catch (e) { return null; }
+    }
 
     function compInfo(msg, color) {
       const el = document.getElementById('compInfo');
@@ -4796,41 +4866,56 @@
     // 口播时间轴：按"每张卡文本在原文中的位置比例"把卡片铺到真实音频时长上。
     // 不使用固定 4.4 字/秒的估算（与真实录音长度不一致），而是以实际录音总长做比例缩放；
     // 没有语音识别时，这是最接近"读到哪句、就出哪张卡"的对齐方式，预览与成片共用同一套时间轴。
-    function buildAudioSegs(list, script, duration, startAt) {
+    function buildAudioSegs(list, script, duration, startAt, pauses) {
       const src = String(script || '');
-      const isPunc = ch => /[\s，,。.、！？?；;：:—\-…“”"'‘’（）()《》]/.test(ch);
-      // 归一化原文（去标点空白）并记录每个字符回到原串的下标：
-      // 卡片 text 常与原文标点不一致（"1700到1750" vs "1700 到 1750"），直接 indexOf 会大面积落空
-      const normChars = [], normMap = [];
-      for (let i = 0; i < src.length; i++) {
-        if (!isPunc(src[i])) { normChars.push(src[i]); normMap.push(i); }
-      }
-      const normSrc = normChars.join('');
+      const normSrc = normForMatch(src);
       const totalChars = Math.max(1, normSrc.length);
       const span = Math.max(0.2, duration - startAt);
-      const posOf = t => {
-        const nt = String(t || '').split('').filter(ch => !isPunc(ch)).join('');
-        if (!nt) return -1;
-        const at = normSrc.indexOf(nt);
-        return at < 0 ? -1 : normMap[at];
-      };
-      const items = [];
-      let lastPos = 0;
-      list.forEach((c, i) => {
-        const t = String(c.text || '').replace(/[。！？；\s]+$/, '');
-        let pos = posOf(t);
-        if (pos < 0) pos = lastPos;
-        lastPos = pos;
-        items.push({ c, i, pos });
+      const sents = splitScriptSentences(src);
+      // 句级起点：按字符比例预测后，吸附到最近的真实停顿点（ffmpeg silencedetect 得到），
+      // 这样 14 句累积的 0.3~0.5 秒停顿不会被"纯字符比例"忽略掉（实测会晚 5~7 秒）
+      const sentStarts = [];
+      let lastPause = startAt;
+      sents.forEach((s, i) => {
+        const basePos = normForMatch(src.slice(0, s.start)).length;
+        let t = startAt + (basePos / totalChars) * span;
+        if (i === 0) { sentStarts.push(startAt); return; }
+        if (Array.isArray(pauses) && pauses.length) {
+          // 纯字符比例会漏掉句间停顿（实测累积偏差 5~7 秒），所以把预测点吸附到真实停顿上；
+          // 半径放到 8 秒以覆盖累积误差，同时强制"必须晚于上一句边界"，避免前后乱序
+          let best = t, bd = 1e9;
+          for (const p of pauses) {
+            const pv = Number(p);
+            if (!isFinite(pv) || pv <= lastPause + 0.15) continue;
+            const d = Math.abs(pv - t);
+            if (d < bd && d <= 8) { bd = d; best = pv; }
+          }
+          if (bd <= 8) t = best;
+        }
+        t = Math.max(t, lastPause + 0.2);
+        lastPause = t;
+        sentStarts.push(t);
       });
+      for (let i = 1; i < sentStarts.length; i++) {
+        sentStarts[i] = Math.max(sentStarts[i], sentStarts[i - 1] + 0.2);
+      }
       const segs = [];
-      items.forEach((it, k) => {
-        const nextPos = (k + 1 < items.length) ? Math.max(items[k + 1].pos, it.pos + 1) : totalChars;
-        const start = startAt + (it.pos / totalChars) * span;
-        const end = startAt + (nextPos / totalChars) * span;
-        segs.push({ card: it.c, idx: it.i, start: start, end: end });
+      list.forEach((c, i) => {
+        const nt = normForMatch(c.text);
+        let si = sents.findIndex(s => {
+          const ns = normForMatch(s.text);
+          return ns.indexOf(nt) >= 0 || nt.indexOf(ns) >= 0;
+        });
+        if (si < 0) si = 0;
+        const sentNorm = normForMatch(sents[si] ? sents[si].text : '');
+        const at = sentNorm.indexOf(nt);
+        const off = at < 0 ? 0 : at;
+        const sentLen = Math.max(1, sentNorm.length);
+        const nextStart = (si + 1 < sents.length) ? sentStarts[si + 1] : duration;
+        const start = sentStarts[si] + (off / sentLen) * Math.max(0.1, nextStart - sentStarts[si]);
+        segs.push({ card: c, idx: i, start: start, end: nextStart });
       });
-      // 强制单调、不重叠、不越界：每张卡至少 0.2 秒，最后一张铺到结尾
+      // 强制单调、不重叠、不越界
       for (let i = 0; i < segs.length; i++) {
         const minStart = i > 0 ? segs[i - 1].start + 0.2 : startAt;
         segs[i].start = Math.max(minStart, Math.min(segs[i].start, duration - 0.2));
@@ -4857,8 +4942,9 @@
       const wasAuto = autoPlay; // batch 模式不会自动恢复轮播，需自己收尾
       btnRun.disabled = true; btnPick.disabled = true;
 
-      // 时间轴：与试听预览完全一致（按每张卡在原文中的位置比例铺到真实音频时长上）
-      const segs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt)
+      // 时间轴：与试听预览完全一致（优先用语音停顿点对齐，拿不到才退回字符比例）
+      const pauses = await ensureCompPauses();
+      const segs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt, pauses)
         .map(s => ({ card: s.card, svg: renderBareCard(s.card), start: s.start, end: s.end }));
       if (!segs.length) {
         btnRun.disabled = false; btnPick.disabled = false;
@@ -5334,7 +5420,14 @@
       // 它们只是换了个样式的原文搬运，用户明确反对卡片泛滥成标签卡
       const isNoNumTags = c => c.type === 'tags' && numsOfCard(c).length === 0;
       const dataCards = out.filter(c => !isTextOnly(c) && !isNoNumTags(c));
-      const finalCards = dataCards.length ? dataCards : out.filter(isTextOnly).slice(0, 1);
+      // 按原句重建：AI 只决定"哪些句子值得做卡"，卡型/数值由规则按整句判定
+      const rebuilt = rebuildCardsBySentence(dataCards.length ? dataCards : out.filter(isTextOnly).slice(0, 1), text);
+      const finalCards = rebuilt.filter(c => {
+        if (c.type === 'title' || c.type === 'quote') return false;
+        if (c.type === 'tags' && numsOfCard(c).length === 0) return false;
+        return true;
+      });
+      const baseCards = finalCards.length ? finalCards : rebuilt.slice(0, 1);
       // 用户指定张数时必须凑齐：先拆多数据点图卡；仍不够再用本地规则按数值去重补齐
       // 自动模式（张数=0）也要守住信息量下限：免费档 glm-4-flash 经常只吐 5 张，
       // 500 字文案只剩 5 张卡就是明显丢信息，此时以"本地全量扫描张数 / 按字数估算"为下限
@@ -5347,18 +5440,34 @@
       });
       const chars = String(text).replace(/\s/g, '').length;
       if (limit > 0) {
-        // 用户指定张数：强制出满 N 张（数据卡 → 标签卡 → 文字卡依次补位，按原文顺序重排）
-        const expanded = expandCardsTo(finalCards, limit);
-        return { cards: fillToExact(expanded, localAll, limit, text), model: j.model || 'AI' };
+        // 用户指定张数：允许拆多数据点图卡来凑数，但拆出来的碎片标题（"到""价一整个假期卡在"）一律丢弃
+        const cleaned = expandCardsTo(baseCards, limit).filter(c => {
+          if (c.type === 'kpi' || c.type === 'gauge') return cleanPoolLabel(c.label || c.title);
+          return true;
+        });
+        return { cards: fillToExact(cleaned, localAll, limit, text), model: j.model || 'AI' };
       }
-      const autoFloor = Math.max(localData.length, Math.min(20, Math.round(chars / 40)));
-      const target = Math.max(finalCards.length, autoFloor);
-      const expanded = expandCardsTo(finalCards, target);
-      // 本地补位池也要先拆开：排行榜/条形图一张里含 2~5 个数据点，
-      // 不拆就只能补 5 张（实测这份文案卡在 5 张就是这个原因）
-      const localPool = expandCardsTo(localData, 50);
-      const filled = fillUpWithLocal(expanded, localPool, target);
-      return { cards: filled, model: j.model || 'AI' };
+      // 自动模式：AI 卡 + 本地数据卡（不拆开）合并去重，按原文顺序排列。
+      // 之前为了"凑张数下限"把排行榜拆成碎片 KPI，导致同一句两三张、标题目录化——这次不再强凑。
+      const merged = baseCards.slice();
+      // 用"整句包含关系"去重：AI 的短句卡与本地长句卡经常是同一句的重叠版本，
+      // 只比前 24 字会漏（"商务宴请在缩…1935…" vs "可玩法一变…商务宴请在缩…1935…"）
+      const seenFull = merged.map(c => normForMatch(c.text));
+      for (const c of localData) {
+        if (merged.length >= 14) break;
+        const full = normForMatch(c.text);
+        if (!full) continue;
+        if (full.length >= 8 && seenFull.some(f => f.includes(full) || full.includes(f))) continue;
+        seenFull.push(full);
+        merged.push(c);
+      }
+      const posInScript = c => {
+        const t = String(c.text || '').replace(/[。！？；\s]+$/, '');
+        const i = text.indexOf(t);
+        return i < 0 ? 1e9 : i;
+      };
+      merged.sort((a, b) => posInScript(a) - posInScript(b));
+      return { cards: merged, model: j.model || 'AI' };
     }
 
     // 本地规则解析（初始示例用，保证首屏即时，不消耗额度）
@@ -5468,6 +5577,7 @@
         // 换视频时先停掉上一段试听并释放旧 Blob URL，避免两个音轨同时响
         if (bg) { try { bg.pause(); } catch (err) {} bg.removeAttribute('src'); bg.style.display = 'none'; }
         if (compBarePreview) { compBarePreview = false; if (cards.length) showCard(activeIndex); }
+        compPauses = null; compPausesKey = '';
         if (compVideo && compVideo.url) { try { URL.revokeObjectURL(compVideo.url); } catch (err) {} }
         try {
           compVideo = await probeVideoFile(f);
@@ -5501,13 +5611,15 @@
         }
         compSyncRAF = requestAnimationFrame(compSyncTick);
       };
-      document.getElementById('compPlayBtn').addEventListener('click', () => {
+      document.getElementById('compPlayBtn').addEventListener('click', async () => {
         const bg = document.getElementById('compBg');
         const btn = document.getElementById('compPlayBtn');
         if (!bg || !compVideo) return;
         if (bg.paused) {
           const startAt = Math.max(0, Number(document.getElementById('compStart').value) || 0);
-          compSyncSegs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt);
+          const script = document.getElementById('textInput').value;
+          // 先用缓存/比例时间轴立即播放（保住用户手势，避免被自动播放策略拦截）
+          compSyncSegs = buildAudioSegs(cards, script, compVideo.duration, startAt, compPauses);
           compSyncIdx = -1;
           bg.style.display = 'block';
           bg.muted = false;
@@ -5518,9 +5630,22 @@
           try { bg.currentTime = Math.min(startAt, Math.max(0, compVideo.duration - 0.05)); } catch (err) {}
           const pr = bg.play();
           if (pr && pr.catch) pr.catch(() => {});
-          if (compSyncSegs.length) { compSyncIdx = compSyncSegs[0].idx; showCard(compSyncIdx); }
+          if (compSyncSegs.length) {
+            // 从"当前播放秒所在的段"开始显示，避免起始秒位于中段时先闪一下最后一张卡
+            const firstSeg = compSyncSegs.find(s => startAt >= s.start && startAt < s.end) || compSyncSegs[0];
+            compSyncIdx = firstSeg.idx;
+            showCard(compSyncIdx);
+          }
           compSyncRAF = requestAnimationFrame(compSyncTick);
           btn.textContent = '⏸ 暂停试听';
+          // 后台跑一次停顿检测，拿到真实句点后无缝替换时间轴（更准）
+          if (!compPauses) {
+            const ps = await ensureCompPauses();
+            if (ps && ps.length && compVideo) {
+              compSyncSegs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt, ps);
+              compInfo('已按语音停顿对齐（检测到 ' + ps.length + ' 个停顿点）', 'var(--sub)');
+            }
+          }
         } else {
           bg.pause();
           stopCompSync();
