@@ -967,8 +967,7 @@
           <input type="file" id="compVideoFile" accept="video/mp4,video/quicktime,video/*" style="display:none">
           <button class="btn btn-sm btn-ghost" id="compPickBtn" style="width:100%;">📁 选择口播视频…</button>
           <div id="compInfo" style="font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6;">尚未选择视频</div>
-          <!-- 口播画面与声音直接播在中间的手机预览里（画面在下、卡片动效在上） -->
-          <button class="btn btn-sm btn-ghost" id="compPlayBtn" style="display:none;width:100%;margin-top:6px;">🎧 试听口播（同步切卡）</button>
+          <!-- 口播画面与声音由播放控制条的 ▶ 统一驱动（不再单独放一个播放器） -->
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin-top:8px;">
             卡片起始秒
             <input type="number" id="compStart" value="0" min="0" step="0.5" style="width:76px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 6px;">
@@ -3954,9 +3953,9 @@
       return String(m).padStart(2, '0') + ':' + (s < 10 ? '0' : '') + s.toFixed(1);
     }
 
-    function updatePlayhead(t) {
-      playHeadTime = Math.max(0, Math.min(t, totalDuration()));
-      const total = totalDuration();
+    function updatePlayhead(t, totalOverride) {
+      const total = (totalOverride != null) ? totalOverride : totalDuration();
+      playHeadTime = Math.max(0, Math.min(t, total));
       const cur = document.getElementById('dockTimeCur');
       if (cur) cur.textContent = fmtTime(playHeadTime);
       const tot = document.getElementById('dockTimeTotal');
@@ -3969,6 +3968,38 @@
     //  整体连播引擎（按各卡片时长顺序播放，播放头同步）
     // ================================
     let playing = false, playOffset = 0, playStart = 0, playRaf = 0;
+    // 口播时钟：导入视频后，播放控制条的 ▶ 同时驱动"视频画面 + 原声 + 卡片切换"，
+    // 声音和卡片取自同一个 bg.currentTime，不再有第二个播放器
+    let compClockOn = false, compSegs = null;
+
+    function compClockStart() {
+      const bg = document.getElementById('compBg');
+      if (!bg || !compVideo) return false;
+      const startAt = Math.max(0, Number(document.getElementById('compStart').value) || 0);
+      compSegs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt, compPauses);
+      if (!compSegs.length) return false;
+      compClockOn = true;
+      compBarePreview = true;
+      stopAutoTimer();
+      bg.style.display = 'block';
+      bg.muted = false;
+      bg.volume = 1;
+      try { bg.currentTime = Math.min(Math.max(playHeadTime, 0), Math.max(0, compVideo.duration - 0.05)); } catch (e) {}
+      const pr = bg.play();
+      if (pr && pr.catch) pr.catch(() => {});
+      return true;
+    }
+
+    function compClockStop(restore) {
+      const bg = document.getElementById('compBg');
+      if (bg) { try { bg.pause(); } catch (e) {} }
+      compClockOn = false;
+      if (restore) {
+        compBarePreview = false;
+        if (cards.length) showCard(activeIndex);
+        updatePlayhead(0);
+      }
+    }
 
     function playPlayback() {
       if (!cards.length) return;
@@ -3979,6 +4010,7 @@
       const btn = document.getElementById('pbPlay');
       if (btn) btn.textContent = '⏸';
       cancelAnimationFrame(playRaf);
+      if (compVideo && !compClockOn) compClockStart(); // 有口播视频就以视频为主时钟
       playRaf = requestAnimationFrame(playTick);
     }
 
@@ -3986,6 +4018,10 @@
       if (!playing) return;
       playing = false;
       cancelAnimationFrame(playRaf);
+      if (compClockOn) {
+        const bg = document.getElementById('compBg');
+        if (bg && !bg.paused) { try { bg.pause(); } catch (e) {} }
+      }
       const btn = document.getElementById('pbPlay');
       if (btn) btn.textContent = '▶';
       saveState();
@@ -3993,6 +4029,23 @@
 
     function playTick(now) {
       if (!playing) return;
+      // 有口播：完全跟随视频时间，声音与卡片同一时钟
+      if (compClockOn && compVideo) {
+        const bg = document.getElementById('compBg');
+        if (bg) {
+          if (bg.ended) {
+            playing = false;
+            const b = document.getElementById('pbPlay');
+            if (b) b.textContent = '▶';
+            compClockStop(true);
+            return;
+          }
+          seekTo(bg.currentTime, true);
+          playRaf = requestAnimationFrame(playTick);
+          return;
+        }
+        compClockOn = false;
+      }
       const total = totalDuration();
       if (total <= 0) return;
       let t = (playOffset + (now - playStart)) / 1000;
@@ -4012,6 +4065,24 @@
 
     // 跳转到指定秒：更新播放头/时间码，必要时轻量切换卡片
     function seekTo(t, fromPlay) {
+      if (compClockOn && compVideo) {
+        const total = compVideo.duration;
+        t = Math.max(0, Math.min(t, total));
+        const bg = document.getElementById('compBg');
+        if (bg && Math.abs(bg.currentTime - t) > 0.35) { try { bg.currentTime = t; } catch (e) {} }
+        if (compSegs && compSegs.length) {
+          // 播放点落在"没有卡片的空隙"时，保持上一张仍在显示的卡，
+          // 不能回退到最后一张（否则开头几秒会莫名闪出末尾的卡）
+          let seg = compSegs.find(s => t >= s.start && t < s.end);
+          if (!seg) {
+            seg = compSegs[0];
+            for (const s of compSegs) { if (s.start <= t) seg = s; else break; }
+          }
+          if (seg && seg.idx !== activeIndex) switchCard(seg.idx, !fromPlay);
+        }
+        updatePlayhead(t, total);
+        return;
+      }
       const total = totalDuration();
       t = Math.max(0, Math.min(t, total));
       const hit = cardAt(t);
@@ -4906,7 +4977,16 @@
           const ns = normForMatch(s.text);
           return ns.indexOf(nt) >= 0 || nt.indexOf(ns) >= 0;
         });
-        if (si < 0) si = 0;
+        if (si < 0) {
+          // 句子定位不到：按卡片文本在全文中的真实字符位置落点，
+          // 绝不默认塞到第 0 句（否则后面的卡会跑到开头，播放顺序全乱）
+          const at0 = nt ? normSrc.indexOf(nt) : -1;
+          if (at0 >= 0) {
+            const t0 = startAt + (at0 / totalChars) * span;
+            segs.push({ card: c, idx: i, start: t0, end: t0 });
+          }
+          return;
+        }
         const sentNorm = normForMatch(sents[si] ? sents[si].text : '');
         const at = sentNorm.indexOf(nt);
         const off = at < 0 ? 0 : at;
@@ -4915,6 +4995,8 @@
         const start = sentStarts[si] + (off / sentLen) * Math.max(0.1, nextStart - sentStarts[si]);
         segs.push({ card: c, idx: i, start: start, end: nextStart });
       });
+      // 按真实时间排序后再做单调修正：播放时卡片就一定按文案顺序出现
+      segs.sort((a, b) => a.start - b.start);
       // 强制单调、不重叠、不越界
       for (let i = 0; i < segs.length; i++) {
         const minStart = i > 0 ? segs[i - 1].start + 0.2 : startAt;
@@ -5590,7 +5672,7 @@
             bg.volume = 1;
           }
           const pb = document.getElementById('compPlayBtn');
-          if (pb) pb.style.display = 'block';
+          if (pb) pb.style.display = 'none';
         } catch (err) {
           compVideo = null;
           document.getElementById('compRunBtn').disabled = true;
@@ -5598,68 +5680,13 @@
         }
       });
       document.getElementById('compRunBtn').addEventListener('click', composeWithVideo);
-      // 试听：手机预览里播放口播画面+原声，卡片按"文本在原文中的位置"自动切换（与成片同一时间轴）
-      let compSyncRAF = 0, compSyncIdx = -1, compSyncSegs = null;
-      const stopCompSync = () => { if (compSyncRAF) { cancelAnimationFrame(compSyncRAF); compSyncRAF = 0; } };
-      const compSyncTick = () => {
-        const bg = document.getElementById('compBg');
-        if (!bg || bg.paused || bg.ended) { stopCompSync(); return; }
-        if (compSyncSegs) {
-          const t = bg.currentTime;
-          const seg = compSyncSegs.find(s => t >= s.start && t < s.end);
-          if (seg && seg.idx !== compSyncIdx) { compSyncIdx = seg.idx; showCard(seg.idx); }
-        }
-        compSyncRAF = requestAnimationFrame(compSyncTick);
-      };
-      document.getElementById('compPlayBtn').addEventListener('click', async () => {
-        const bg = document.getElementById('compBg');
-        const btn = document.getElementById('compPlayBtn');
-        if (!bg || !compVideo) return;
-        if (bg.paused) {
-          const startAt = Math.max(0, Number(document.getElementById('compStart').value) || 0);
-          const script = document.getElementById('textInput').value;
-          // 先用缓存/比例时间轴立即播放（保住用户手势，避免被自动播放策略拦截）
-          compSyncSegs = buildAudioSegs(cards, script, compVideo.duration, startAt, compPauses);
-          compSyncIdx = -1;
-          bg.style.display = 'block';
-          bg.muted = false;
-          bg.volume = 1;
-          // 卡片切成透明裸动效，叠在口播画面上
-          compBarePreview = true;
-          stopAutoTimer();
-          try { bg.currentTime = Math.min(startAt, Math.max(0, compVideo.duration - 0.05)); } catch (err) {}
-          const pr = bg.play();
-          if (pr && pr.catch) pr.catch(() => {});
-          if (compSyncSegs.length) {
-            // 从"当前播放秒所在的段"开始显示，避免起始秒位于中段时先闪一下最后一张卡
-            const firstSeg = compSyncSegs.find(s => startAt >= s.start && startAt < s.end) || compSyncSegs[0];
-            compSyncIdx = firstSeg.idx;
-            showCard(compSyncIdx);
-          }
-          compSyncRAF = requestAnimationFrame(compSyncTick);
-          btn.textContent = '⏸ 暂停试听';
-          // 后台跑一次停顿检测，拿到真实句点后无缝替换时间轴（更准）
-          if (!compPauses) {
-            const ps = await ensureCompPauses();
-            if (ps && ps.length && compVideo) {
-              compSyncSegs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt, ps);
-              compInfo('已按语音停顿对齐（检测到 ' + ps.length + ' 个停顿点）', 'var(--sub)');
-            }
-          }
-        } else {
-          bg.pause();
-          stopCompSync();
-          btn.textContent = '🎧 试听口播（同步切卡）';
-        }
-      });
+      // 口播播放已并入播放控制条的 ▶（playPlayback → compClockStart），这里只处理视频自然结束
       const compBgEl = document.getElementById('compBg');
       if (compBgEl) compBgEl.addEventListener('ended', () => {
-        stopCompSync();
-        compBgEl.style.display = 'none';
-        // 退出试听：恢复完整卡片样式（带背景）
-        compBarePreview = false;
-        if (cards.length) showCard(activeIndex);
-        document.getElementById('compPlayBtn').textContent = '🎧 试听口播（同步切卡）';
+        playing = false;
+        const pb = document.getElementById('pbPlay');
+        if (pb) pb.textContent = '▶';
+        compClockStop(true);
       });
       // 手机预览：展示局域网地址（手机连同一 Wi-Fi 打开即实时同步）
       document.getElementById('mobilePreviewBtn').addEventListener('click', async () => {
@@ -5703,6 +5730,7 @@
       document.getElementById('pbFirst').addEventListener('click', () => {
         stopAutoTimer();
         pausePlayback();
+        compClockStop(true); // 回到第一张卡时同时停掉口播画面
         if (cards.length) showCard(0);
         updatePlayhead(0);
         startAutoTimer();
