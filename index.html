@@ -965,6 +965,9 @@
           <input type="file" id="compVideoFile" accept="video/mp4,video/quicktime,video/*" style="display:none">
           <button class="btn btn-sm btn-ghost" id="compPickBtn" style="width:100%;">📁 选择口播视频…</button>
           <div id="compInfo" style="font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6;">尚未选择视频</div>
+          <!-- 口播原声试听：选中视频后可直接播放声音（画面不需要看，只保留音轨） -->
+          <audio id="compAudio" controls preload="metadata" style="display:none;width:100%;height:36px;margin-top:8px;"></audio>
+          <button class="btn btn-sm btn-ghost" id="compPlayBtn" style="display:none;width:100%;margin-top:6px;">🎧 试听口播（同步切卡）</button>
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin-top:8px;">
             卡片起始秒
             <input type="number" id="compStart" value="0" min="0" step="0.5" style="width:76px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 6px;">
@@ -4788,6 +4791,9 @@
 
     async function composeWithVideo() {
       if (!compVideo) { alert('请先选择口播视频'); return; }
+      // 合成时停掉试听，避免原声与合成过程互相干扰
+      const auEl = document.getElementById('compAudio');
+      if (auEl && !auEl.paused) { try { auEl.pause(); } catch (e) {} }
       if (!cards.length) { alert('请先生成卡片'); return; }
       if (videoRecording) { alert('正在导出其他视频，请稍候再试'); return; }
       if (!('VideoEncoder' in window)) { alert('当前浏览器不支持视频编码，请用新版 Chrome / Edge 打开工作台。'); return; }
@@ -5412,10 +5418,24 @@
       document.getElementById('compVideoFile').addEventListener('change', async e => {
         const f = e.target.files && e.target.files[0];
         if (!f) return;
+        const au = document.getElementById('compAudio');
+        // 换视频时先停掉上一段试听并释放旧 Blob URL，避免两个音轨同时响
+        if (au) { try { au.pause(); } catch (err) {} au.removeAttribute('src'); au.style.display = 'none'; }
+        if (compVideo && compVideo.url) { try { URL.revokeObjectURL(compVideo.url); } catch (err) {} }
         try {
           compVideo = await probeVideoFile(f);
           document.getElementById('compRunBtn').disabled = false;
           compInfo('已选择：' + f.name + '（' + compVideo.duration.toFixed(1) + 's · ' + compVideo.w + '×' + compVideo.h + ' · ' + (f.size / 1048576).toFixed(1) + 'MB）', 'var(--txt)');
+          // 挂上同一个 Blob URL 供试听：视频文件用 audio 元素播放音轨即可
+          if (au) {
+            au.src = compVideo.url;
+            au.volume = 1;
+            au.muted = false;
+            au.style.display = 'block';
+            au.load();
+          }
+          const pb = document.getElementById('compPlayBtn');
+          if (pb) pb.style.display = 'block';
         } catch (err) {
           compVideo = null;
           document.getElementById('compRunBtn').disabled = true;
@@ -5423,6 +5443,43 @@
         }
       });
       document.getElementById('compRunBtn').addEventListener('click', composeWithVideo);
+      // 试听口播：播原声的同时按卡片时长自动切卡，模拟合成后的节奏（画面仍用卡片预览）
+      let compSyncRAF = 0, compSyncIdx = -1;
+      const stopCompSync = () => { if (compSyncRAF) { cancelAnimationFrame(compSyncRAF); compSyncRAF = 0; } };
+      const compSyncTick = () => {
+        const au = document.getElementById('compAudio');
+        if (!au || au.paused || au.ended) { stopCompSync(); return; }
+        const startAt = Math.max(0, Number(document.getElementById('compStart').value) || 0);
+        let cur = startAt, idx = -1;
+        for (let i = 0; i < cards.length; i++) {
+          const d = cardDuration(cards[i]);
+          if (au.currentTime >= cur && au.currentTime < cur + d) { idx = i; break; }
+          cur += d;
+        }
+        if (idx >= 0 && idx !== compSyncIdx) { compSyncIdx = idx; showCard(idx); }
+        compSyncRAF = requestAnimationFrame(compSyncTick);
+      };
+      document.getElementById('compPlayBtn').addEventListener('click', () => {
+        const au = document.getElementById('compAudio');
+        const btn = document.getElementById('compPlayBtn');
+        if (!au || !compVideo) return;
+        if (au.paused) {
+          compSyncIdx = -1;
+          const pr = au.play();
+          if (pr && pr.catch) pr.catch(() => {});
+          compSyncRAF = requestAnimationFrame(compSyncTick);
+          btn.textContent = '⏸ 暂停试听';
+        } else {
+          au.pause();
+          stopCompSync();
+          btn.textContent = '🎧 试听口播（同步切卡）';
+        }
+      });
+      const compAuEl = document.getElementById('compAudio');
+      if (compAuEl) compAuEl.addEventListener('ended', () => {
+        stopCompSync();
+        document.getElementById('compPlayBtn').textContent = '🎧 试听口播（同步切卡）';
+      });
       // 手机预览：展示局域网地址（手机连同一 Wi-Fi 打开即实时同步）
       document.getElementById('mobilePreviewBtn').addEventListener('click', async () => {
         const modal = document.getElementById('mobileModal');
