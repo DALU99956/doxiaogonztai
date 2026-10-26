@@ -904,6 +904,8 @@
               <div class="d-btn d-voldn" title="音量 −"></div>
               <div class="d-btn d-power" title="电源键"></div>
               <div class="phone" id="phone">
+                <!-- 口播画面底层：试听时播放原视频（带声音），卡片动效 SVG 叠在它上面 -->
+                <video id="compBg" playsinline preload="metadata" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;display:none;background:#000;"></video>
                 <svg id="layer0" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid meet"></svg>
                 <svg id="layer1" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid meet" class="layer-off"></svg>
                 <div class="dy-island"><span class="island-cam"></span><span class="island-sensor"></span></div>
@@ -965,8 +967,7 @@
           <input type="file" id="compVideoFile" accept="video/mp4,video/quicktime,video/*" style="display:none">
           <button class="btn btn-sm btn-ghost" id="compPickBtn" style="width:100%;">📁 选择口播视频…</button>
           <div id="compInfo" style="font-size:12px;color:var(--sub);margin-top:6px;line-height:1.6;">尚未选择视频</div>
-          <!-- 口播原声试听：选中视频后可直接播放声音（画面不需要看，只保留音轨） -->
-          <audio id="compAudio" controls preload="metadata" style="display:none;width:100%;height:36px;margin-top:8px;"></audio>
+          <!-- 口播画面与声音直接播在中间的手机预览里（画面在下、卡片动效在上） -->
           <button class="btn btn-sm btn-ghost" id="compPlayBtn" style="display:none;width:100%;margin-top:6px;">🎧 试听口播（同步切卡）</button>
           <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--sub);margin-top:8px;">
             卡片起始秒
@@ -3739,8 +3740,9 @@
       if (!cards.length) return;
       activeIndex = (i + cards.length) % cards.length;
       const card = cards[activeIndex];
-      const svg = renderCard(card);
-      if (!playing) startAutoTimer(); // 空闲轮播按新卡片时长重启（连播中不打扰）
+      // 试听口播时用裸动效（透明背景）叠在视频上，否则卡片背景会把口播画面整块盖住
+      const svg = compBarePreview ? renderBareCard(card) : renderCard(card);
+      if (!playing && !compBarePreview) startAutoTimer(); // 空闲轮播按新卡片时长重启（连播/试听中不打扰）
 
       const nextLayer = activeLayer === 0 ? 1 : 0;
       const nextEl = getLayerEl(nextLayer);
@@ -3870,6 +3872,8 @@
     let loopPlay = true; // 连播循环
     let playHeadTime = 0; // 播放头当前秒数
     let autoTimer = 0; // 空闲自动轮播定时器（与连播引擎互斥）
+    // 口播试听模式：卡片改用"裸动效"渲染（透明背景），叠在口播视频画面上，而不是整块背景盖住视频
+    let compBarePreview = false;
     let autoPlay = false; // 空闲自动轮播开关：默认关闭，用户勾选后才生效
 
     function stopAutoTimer() {
@@ -4789,11 +4793,59 @@
       };
     }
 
+    // 口播时间轴：按"每张卡文本在原文中的位置比例"把卡片铺到真实音频时长上。
+    // 不使用固定 4.4 字/秒的估算（与真实录音长度不一致），而是以实际录音总长做比例缩放；
+    // 没有语音识别时，这是最接近"读到哪句、就出哪张卡"的对齐方式，预览与成片共用同一套时间轴。
+    function buildAudioSegs(list, script, duration, startAt) {
+      const src = String(script || '');
+      const isPunc = ch => /[\s，,。.、！？?；;：:—\-…“”"'‘’（）()《》]/.test(ch);
+      // 归一化原文（去标点空白）并记录每个字符回到原串的下标：
+      // 卡片 text 常与原文标点不一致（"1700到1750" vs "1700 到 1750"），直接 indexOf 会大面积落空
+      const normChars = [], normMap = [];
+      for (let i = 0; i < src.length; i++) {
+        if (!isPunc(src[i])) { normChars.push(src[i]); normMap.push(i); }
+      }
+      const normSrc = normChars.join('');
+      const totalChars = Math.max(1, normSrc.length);
+      const span = Math.max(0.2, duration - startAt);
+      const posOf = t => {
+        const nt = String(t || '').split('').filter(ch => !isPunc(ch)).join('');
+        if (!nt) return -1;
+        const at = normSrc.indexOf(nt);
+        return at < 0 ? -1 : normMap[at];
+      };
+      const items = [];
+      let lastPos = 0;
+      list.forEach((c, i) => {
+        const t = String(c.text || '').replace(/[。！？；\s]+$/, '');
+        let pos = posOf(t);
+        if (pos < 0) pos = lastPos;
+        lastPos = pos;
+        items.push({ c, i, pos });
+      });
+      const segs = [];
+      items.forEach((it, k) => {
+        const nextPos = (k + 1 < items.length) ? Math.max(items[k + 1].pos, it.pos + 1) : totalChars;
+        const start = startAt + (it.pos / totalChars) * span;
+        const end = startAt + (nextPos / totalChars) * span;
+        segs.push({ card: it.c, idx: it.i, start: start, end: end });
+      });
+      // 强制单调、不重叠、不越界：每张卡至少 0.2 秒，最后一张铺到结尾
+      for (let i = 0; i < segs.length; i++) {
+        const minStart = i > 0 ? segs[i - 1].start + 0.2 : startAt;
+        segs[i].start = Math.max(minStart, Math.min(segs[i].start, duration - 0.2));
+        const nextStart = (i + 1 < segs.length) ? segs[i + 1].start : duration;
+        segs[i].end = Math.min(duration, Math.max(segs[i].start + 0.2, Math.min(segs[i].end, nextStart)));
+        if (i + 1 < segs.length && segs[i + 1].start < segs[i].end) segs[i + 1].start = segs[i].end;
+      }
+      return segs;
+    }
+
     async function composeWithVideo() {
       if (!compVideo) { alert('请先选择口播视频'); return; }
       // 合成时停掉试听，避免原声与合成过程互相干扰
-      const auEl = document.getElementById('compAudio');
-      if (auEl && !auEl.paused) { try { auEl.pause(); } catch (e) {} }
+      const bgA = document.getElementById('compBg');
+      if (bgA && !bgA.paused) { try { bgA.pause(); } catch (e) {} }
       if (!cards.length) { alert('请先生成卡片'); return; }
       if (videoRecording) { alert('正在导出其他视频，请稍候再试'); return; }
       if (!('VideoEncoder' in window)) { alert('当前浏览器不支持视频编码，请用新版 Chrome / Edge 打开工作台。'); return; }
@@ -4805,15 +4857,9 @@
       const wasAuto = autoPlay; // batch 模式不会自动恢复轮播，需自己收尾
       btnRun.disabled = true; btnPick.disabled = true;
 
-      // 时间轴：起始秒 S 之后按各卡时长依次铺开，超出视频时长即截断
-      const segs = [];
-      let cur = startAt;
-      for (const c of cards) {
-        if (cur >= compVideo.duration) break;
-        const end = Math.min(compVideo.duration, cur + cardDuration(c));
-        segs.push({ card: c, svg: renderBareCard(c), start: cur, end });
-        cur = end;
-      }
+      // 时间轴：与试听预览完全一致（按每张卡在原文中的位置比例铺到真实音频时长上）
+      const segs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt)
+        .map(s => ({ card: s.card, svg: renderBareCard(s.card), start: s.start, end: s.end }));
       if (!segs.length) {
         btnRun.disabled = false; btnPick.disabled = false;
         alert('起始秒 ' + startAt + 's 已超过视频时长 ' + compVideo.duration.toFixed(1) + 's，没有卡片可显示');
@@ -5418,21 +5464,20 @@
       document.getElementById('compVideoFile').addEventListener('change', async e => {
         const f = e.target.files && e.target.files[0];
         if (!f) return;
-        const au = document.getElementById('compAudio');
+        const bg = document.getElementById('compBg');
         // 换视频时先停掉上一段试听并释放旧 Blob URL，避免两个音轨同时响
-        if (au) { try { au.pause(); } catch (err) {} au.removeAttribute('src'); au.style.display = 'none'; }
+        if (bg) { try { bg.pause(); } catch (err) {} bg.removeAttribute('src'); bg.style.display = 'none'; }
+        if (compBarePreview) { compBarePreview = false; if (cards.length) showCard(activeIndex); }
         if (compVideo && compVideo.url) { try { URL.revokeObjectURL(compVideo.url); } catch (err) {} }
         try {
           compVideo = await probeVideoFile(f);
           document.getElementById('compRunBtn').disabled = false;
           compInfo('已选择：' + f.name + '（' + compVideo.duration.toFixed(1) + 's · ' + compVideo.w + '×' + compVideo.h + ' · ' + (f.size / 1048576).toFixed(1) + 'MB）', 'var(--txt)');
-          // 挂上同一个 Blob URL 供试听：视频文件用 audio 元素播放音轨即可
-          if (au) {
-            au.src = compVideo.url;
-            au.volume = 1;
-            au.muted = false;
-            au.style.display = 'block';
-            au.load();
+          // 画面 + 声音都交给手机预览里的 video，卡片动效 SVG 叠在它上面
+          if (bg) {
+            bg.src = compVideo.url;
+            bg.muted = false;
+            bg.volume = 1;
           }
           const pb = document.getElementById('compPlayBtn');
           if (pb) pb.style.display = 'block';
@@ -5443,41 +5488,52 @@
         }
       });
       document.getElementById('compRunBtn').addEventListener('click', composeWithVideo);
-      // 试听口播：播原声的同时按卡片时长自动切卡，模拟合成后的节奏（画面仍用卡片预览）
-      let compSyncRAF = 0, compSyncIdx = -1;
+      // 试听：手机预览里播放口播画面+原声，卡片按"文本在原文中的位置"自动切换（与成片同一时间轴）
+      let compSyncRAF = 0, compSyncIdx = -1, compSyncSegs = null;
       const stopCompSync = () => { if (compSyncRAF) { cancelAnimationFrame(compSyncRAF); compSyncRAF = 0; } };
       const compSyncTick = () => {
-        const au = document.getElementById('compAudio');
-        if (!au || au.paused || au.ended) { stopCompSync(); return; }
-        const startAt = Math.max(0, Number(document.getElementById('compStart').value) || 0);
-        let cur = startAt, idx = -1;
-        for (let i = 0; i < cards.length; i++) {
-          const d = cardDuration(cards[i]);
-          if (au.currentTime >= cur && au.currentTime < cur + d) { idx = i; break; }
-          cur += d;
+        const bg = document.getElementById('compBg');
+        if (!bg || bg.paused || bg.ended) { stopCompSync(); return; }
+        if (compSyncSegs) {
+          const t = bg.currentTime;
+          const seg = compSyncSegs.find(s => t >= s.start && t < s.end);
+          if (seg && seg.idx !== compSyncIdx) { compSyncIdx = seg.idx; showCard(seg.idx); }
         }
-        if (idx >= 0 && idx !== compSyncIdx) { compSyncIdx = idx; showCard(idx); }
         compSyncRAF = requestAnimationFrame(compSyncTick);
       };
       document.getElementById('compPlayBtn').addEventListener('click', () => {
-        const au = document.getElementById('compAudio');
+        const bg = document.getElementById('compBg');
         const btn = document.getElementById('compPlayBtn');
-        if (!au || !compVideo) return;
-        if (au.paused) {
+        if (!bg || !compVideo) return;
+        if (bg.paused) {
+          const startAt = Math.max(0, Number(document.getElementById('compStart').value) || 0);
+          compSyncSegs = buildAudioSegs(cards, document.getElementById('textInput').value, compVideo.duration, startAt);
           compSyncIdx = -1;
-          const pr = au.play();
+          bg.style.display = 'block';
+          bg.muted = false;
+          bg.volume = 1;
+          // 卡片切成透明裸动效，叠在口播画面上
+          compBarePreview = true;
+          stopAutoTimer();
+          try { bg.currentTime = Math.min(startAt, Math.max(0, compVideo.duration - 0.05)); } catch (err) {}
+          const pr = bg.play();
           if (pr && pr.catch) pr.catch(() => {});
+          if (compSyncSegs.length) { compSyncIdx = compSyncSegs[0].idx; showCard(compSyncIdx); }
           compSyncRAF = requestAnimationFrame(compSyncTick);
           btn.textContent = '⏸ 暂停试听';
         } else {
-          au.pause();
+          bg.pause();
           stopCompSync();
           btn.textContent = '🎧 试听口播（同步切卡）';
         }
       });
-      const compAuEl = document.getElementById('compAudio');
-      if (compAuEl) compAuEl.addEventListener('ended', () => {
+      const compBgEl = document.getElementById('compBg');
+      if (compBgEl) compBgEl.addEventListener('ended', () => {
         stopCompSync();
+        compBgEl.style.display = 'none';
+        // 退出试听：恢复完整卡片样式（带背景）
+        compBarePreview = false;
+        if (cards.length) showCard(activeIndex);
         document.getElementById('compPlayBtn').textContent = '🎧 试听口播（同步切卡）';
       });
       // 手机预览：展示局域网地址（手机连同一 Wi-Fi 打开即实时同步）
